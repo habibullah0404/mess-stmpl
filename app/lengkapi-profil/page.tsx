@@ -40,9 +40,11 @@ export default function LengkapiProfilPage() {
       return;
     }
     setLoading(true);
+    
+    // PERBAIKAN: Menggunakan upsert agar tidak error saat email sudah ada
     const { data, error: err } = await supabase
       .from('Anggota')
-      .insert({
+      .upsert({
         nama: nama.trim(),
         jabatan: jabatan.trim() || null,
         nama_pt: namaPt.trim() || null,
@@ -51,9 +53,10 @@ export default function LengkapiProfilPage() {
         email: user.email,
         role: 'member',
         lulusan_tahun: lulusanTahun.trim() || null,
-      })
+      }, { onConflict: 'email' }) // Memastikan tidak ada tabrakan email
       .select('id, nama, email, role')
       .single();
+      
     setLoading(false);
     if (err) {
       setError(err.message);
@@ -95,7 +98,7 @@ export default function LengkapiProfilPage() {
 
               <Field label="Jabatan" icon={Briefcase}>
                 <Input
-                  placeholder="Contoh: Masinis, ABK, Officer"
+                  placeholder="Contoh: Helmsman, AB, Masinis"
                   value={jabatan}
                   onChange={(e) => setJabatan(e.target.value)}
                   className="h-10 pl-10"
