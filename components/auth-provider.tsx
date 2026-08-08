@@ -29,7 +29,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const cleaningUp = useRef(false);
   const initialized = useRef(false);
 
-  const cleanupAndRedirect = async () => {
+    const cleanupAndRedirect = async () => {
     if (cleaningUp.current) return;
     cleaningUp.current = true;
 
@@ -49,7 +49,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setProfile(null);
     setProfileChecked(true);
     setLoading(false);
+    
+    router.refresh();
     router.replace('/login');
+
+    // BUKA GEMBOK KEMBALI agar bisa login lagi nanti
+    setTimeout(() => {
+      cleaningUp.current = false;
+    }, 500);
   };
 
   const fetchProfile = async (email: string) => {
@@ -196,25 +203,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error: error?.message ?? null };
   };
 
-    const signOut = async () => {
+      const signOut = async () => {
     cleaningUp.current = true;
     try {
       await supabase.auth.signOut();
-    } catch (e) {
-      console.error("Sign out error", e);
+    } catch {
+      // abaikan error
     }
-    
-    // Reset state secara manual dan paksa
+    try {
+      localStorage.clear();
+    } catch {
+      // abaikan error
+    }
     setSession(null);
     setProfile(null);
     setProfileChecked(true);
     setLoading(false);
     
-    // PENTING: Perintah ini akan memaksa Next.js memuat ulang semua data dari server
-    router.refresh(); 
+    router.refresh();
     router.replace('/login');
-  };
 
+    // BUKA GEMBOK KEMBALI agar bisa login lagi nanti
+    setTimeout(() => {
+      cleaningUp.current = false;
+    }, 500);
+  };
 
   const value: AuthContextValue = {
     session,
