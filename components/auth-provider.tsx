@@ -196,24 +196,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error: error?.message ?? null };
   };
 
-  const signOut = async () => {
+    const signOut = async () => {
     cleaningUp.current = true;
     try {
       await supabase.auth.signOut();
-    } catch {
-      // abaikan error
+    } catch (e) {
+      console.error("Sign out error", e);
     }
-    try {
-      localStorage.clear();
-    } catch {
-      // abaikan error
-    }
+    
+    // Reset state secara manual dan paksa
     setSession(null);
     setProfile(null);
     setProfileChecked(true);
     setLoading(false);
+    
+    // PENTING: Perintah ini akan memaksa Next.js memuat ulang semua data dari server
+    router.refresh(); 
     router.replace('/login');
   };
+
 
   const value: AuthContextValue = {
     session,
