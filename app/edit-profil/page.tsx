@@ -19,6 +19,7 @@ import {
   CheckCircle2,
   Camera,
   Upload,
+  X,
 } from 'lucide-react';
 import { useAuth } from '@/components/auth-provider';
 import { supabase, type Pengalaman, JENIS_KAPAL_OPTIONS, RUTE_OPTIONS, LULUSAN_TAHUN_OPTIONS } from '@/lib/supabase';
@@ -33,6 +34,53 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 
+// Import Library Crop Foto
+import Cropper from 'react-easy-crop';
+
+// --- FUNGSI KANVAS UNTUK KOMPRESI FOTO ---
+const createImage = (url: string): Promise<HTMLImageElement> =>
+  new Promise((resolve, reject) => {
+    const image = new Image();
+    image.addEventListener('load', () => resolve(image));
+    image.addEventListener('error', (error) => reject(error));
+    image.setAttribute('crossOrigin', 'anonymous');
+    image.src = url;
+  });
+
+async function getCroppedImg(
+  imageSrc: string,
+  pixelCrop: { x: number; y: number; width: number; height: number }
+): Promise<Blob | null> {
+  const image = await createImage(imageSrc);
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+
+  // Ukuran target foto profil (400x400 px) -> Membuat file sangat kecil!
+  const targetSize = 400;
+  canvas.width = targetSize;
+  canvas.height = targetSize;
+
+  ctx.drawImage(
+    image,
+    pixelCrop.x,
+    pixelCrop.y,
+    pixelCrop.width,
+    pixelCrop.height,
+    0,
+    0,
+    targetSize,
+    targetSize
+  );
+
+  return new Promise((resolve) => {
+    canvas.toBlob((blob) => {
+      resolve(blob);
+    }, 'image/jpeg', 0.8); // Kompresi JPEG kualitas 80%
+  });
+}
+// ----------------------------------------
+
 export default function EditProfilPage() {
   const { user, profile, loading: authLoading, refreshProfile } = useAuth();
   const router = useRouter();
@@ -46,14 +94,9 @@ export default function EditProfilPage() {
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileMsg, setProfileMsg] = useState<{ type: 'error' | 'success'; text: string } | null>(null);
 
-  // Photo upload state
-  const [uploadingPhoto, setUploadingPhoto] = useState(false);
-  const [photoMsg, setPhotoMsg] = useState<{ type: 'error' | 'success'; text: string } | null>(null);
-
   const [pengalaman, setPengalaman] = useState<Pengalaman[]>([]);
   const [loadingPengalaman, setLoadingPengalaman] = useState(true);
 
-  // Form state for new pengalaman
   const [namaKapal, setNamaKapal] = useState('');
   const [namaPerusahaan, setNamaPerusahaan] = useState('');
   const [jenisKapal, setJenisKapal] = useState('');
@@ -62,6 +105,17 @@ export default function EditProfilPage() {
   const [durasiTahun, setDurasiTahun] = useState('');
   const [savingPengalaman, setSavingPengalaman] = useState(false);
   const [pengalamanMsg, setPengalamanMsg] = useState<{ type: 'error' | 'success'; text: string } | null>(null);
+
+  // --- STATE UNTUK CROP & UPLOAD FOTO ---
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [photoMsg, setPhotoMsg] = useState<{ type: 'error' | 'success'; text: string } | null>(null);
+  
+  const [imageSrc, setImageSrc] = useState<string | null>(null);
+  const [crop, setCrop] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
+  const [croppedAreaPixels, setCroppedAreaPixels] = useState<any>(null);
+  const [isCropModalOpen, setIsCropModalOpen] = useState(false);
+  // --------------------------------------
 
   useEffect(() => {
     if (authLoading) return;
@@ -181,75 +235,87 @@ export default function EditProfilPage() {
     setPengalaman((prev) => prev.filter((p) => p.id !== id));
   };
 
-  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !profile || !user) return;
+  // --- LOGIKA BARU UNTUK FOTO ---
+  const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      const file = e.target.files[0];
+      if (!file.type.startsWith('image/')) {
+        setPhotoMsg({ type: 'error', text: 'File harus berupa gambar.' });
+        return;
+      }
+      const reader = new FileReader();
+      reader.addEventListener('load', () => {
+        setImageSrc(reader.result?.toString() || null);
+        setIsCropModalOpen(true);
+      });
+      reader.readAsDataURL(file);
+    }
+    e.target.value = ''; // Reset input
+  };
+
+  const onCropComplete = useCallback((croppedArea: any, croppedAreaPixels: any) => {
+    setCroppedAreaPixels(croppedAreaPixels);
+  }, []);
+
+  const handleCropAndSave = async () => {
+    if (!imageSrc || !croppedAreaPixels || !profile || !user) return;
+    
+    setUploadingPhoto(true);
     setPhotoMsg(null);
 
-    // Client-side validation: max 2MB
-    const MAX_SIZE = 2 * 1024 * 1024;
-    if (file.size > MAX_SIZE) {
-      setPhotoMsg({ type: 'error', text: 'Ukuran file melebihi 2MB. Silakan pilih file yang lebih kecil.' });
-      e.target.value = '';
-      return;
-    }
-    if (!file.type.startsWith('image/')) {
-      setPhotoMsg({ type: 'error', text: 'File harus berupa gambar.' });
-      e.target.value = '';
-      return;
-    }
+    try {
+      // 1. Potong dan Kompres Foto
+      const croppedBlob = await getCroppedImg(imageSrc, croppedAreaPixels);
+      if (!croppedBlob) throw new Error('Gagal memproses foto.');
 
-    setUploadingPhoto(true);
-    const fileExt = file.name.split('.').pop()?.toLowerCase() || 'jpg';
-    const filePath = `${user.id}/avatar-${Date.now()}.${fileExt}`;
+      // 2. Siapkan File untuk Supabase
+      const fileExt = 'jpeg';
+      const filePath = `${user.id}/avatar-${Date.now()}.${fileExt}`;
 
-    // Upload new photo
-    const { error: uploadErr } = await supabase.storage
-      .from('profile-photos')
-      .upload(filePath, file, { cacheControl: '3600', upsert: false });
+      // 3. Upload ke Supabase
+      const { error: uploadErr } = await supabase.storage
+        .from('profile-photos')
+        .upload(filePath, croppedBlob, { cacheControl: '3600', upsert: false });
 
-    if (uploadErr) {
-      setUploadingPhoto(false);
-      setPhotoMsg({ type: 'error', text: uploadErr.message });
-      e.target.value = '';
-      return;
-    }
+      if (uploadErr) throw uploadErr;
 
-    // Get public URL
-    const { data: urlData } = supabase.storage.from('profile-photos').getPublicUrl(filePath);
-    const newFotoUrl = urlData.publicUrl;
+      // 4. Dapatkan URL Publik
+      const { data: urlData } = supabase.storage.from('profile-photos').getPublicUrl(filePath);
+      const newFotoUrl = urlData.publicUrl;
 
-    // Update Anggota.foto_url
-    const oldFotoUrl = profile.foto_url;
-    const { error: dbErr } = await supabase
-      .from('Anggota')
-      .update({ foto_url: newFotoUrl })
-      .eq('id', profile.id);
+      // 5. Update Database Anggota
+      const oldFotoUrl = profile.foto_url;
+      const { error: dbErr } = await supabase
+        .from('Anggota')
+        .update({ foto_url: newFotoUrl })
+        .eq('id', profile.id);
 
-    if (dbErr) {
-      setUploadingPhoto(false);
-      setPhotoMsg({ type: 'error', text: dbErr.message });
-      e.target.value = '';
-      return;
-    }
+      if (dbErr) throw dbErr;
 
-    // Delete old photo from storage if exists
-    if (oldFotoUrl) {
-      try {
-        const oldPath = oldFotoUrl.split('/profile-photos/')[1];
-        if (oldPath) {
-          await supabase.storage.from('profile-photos').remove([oldPath]);
+      // 6. Hapus Foto Lama (Opsional, agar tidak memenuhi storage)
+      if (oldFotoUrl) {
+        try {
+          const oldPath = oldFotoUrl.split('/profile-photos/')[1];
+          if (oldPath) {
+            await supabase.storage.from('profile-photos').remove([oldPath]);
+          }
+        } catch {
+          // Abaikan jika gagal menghapus
         }
-      } catch {
-        // best-effort deletion; ignore errors
       }
-    }
 
-    setUploadingPhoto(false);
-    e.target.value = '';
-    setPhotoMsg({ type: 'success', text: 'Foto profil berhasil diperbarui.' });
-    await refreshProfile();
+      setPhotoMsg({ type: 'success', text: 'Foto profil berhasil diperbarui.' });
+      setIsCropModalOpen(false);
+      setImageSrc(null);
+      await refreshProfile();
+
+    } catch (error: any) {
+      setPhotoMsg({ type: 'error', text: error.message || 'Terjadi kesalahan saat mengunggah foto.' });
+    } finally {
+      setUploadingPhoto(false);
+    }
   };
+  // --------------------------------
 
   if (authLoading) {
     return (
@@ -265,6 +331,66 @@ export default function EditProfilPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
+      
+      {/* MODAL CROP FOTO */}
+      {isCropModalOpen && imageSrc && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl bg-white p-4 shadow-2xl dark:bg-slate-900">
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100">Atur Posisi Foto</h3>
+              <button 
+                onClick={() => { setIsCropModalOpen(false); setImageSrc(null); }} 
+                className="rounded-full p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            
+            <div className="relative h-80 w-full overflow-hidden rounded-xl bg-slate-100 dark:bg-slate-800">
+              <Cropper
+                image={imageSrc}
+                crop={crop}
+                zoom={zoom}
+                aspect={1}
+                cropShape="round"
+                showGrid={false}
+                onCropChange={setCrop}
+                onCropComplete={onCropComplete}
+                onZoomChange={setZoom}
+              />
+            </div>
+            
+            <div className="mt-4 flex items-center gap-2 px-2">
+              <span className="text-xs text-slate-500">Gunakan dua jari untuk Zoom (atau geser foto)</span>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-3">
+              <Button 
+                variant="outline" 
+                onClick={() => { setIsCropModalOpen(false); setImageSrc(null); }}
+                disabled={uploadingPhoto}
+              >
+                Batal
+              </Button>
+              <Button 
+                onClick={handleCropAndSave} 
+                className="bg-blue-900 hover:bg-blue-800" 
+                disabled={uploadingPhoto}
+              >
+                {uploadingPhoto ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Memproses...
+                  </>
+                ) : (
+                  "Simpan Foto"
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <main className="mx-auto max-w-3xl px-4 py-6 sm:px-6 lg:px-8">
         <button
           onClick={() => router.push('/')}
@@ -314,13 +440,13 @@ export default function EditProfilPage() {
                   <input
                     type="file"
                     accept="image/*"
-                    onChange={handlePhotoUpload}
+                    onChange={onFileChange}
                     disabled={uploadingPhoto}
                     className="hidden"
                   />
                 </label>
                 <p className="mt-2 text-xs text-slate-400">
-                  Maksimal 2MB. Format: JPG, PNG, WebP.
+                  Pilih foto apa saja. Anda bisa memotongnya di langkah selanjutnya.
                 </p>
                 {photoMsg && <MsgBanner type={photoMsg.type} text={photoMsg.text} />}
               </div>
