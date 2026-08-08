@@ -50,13 +50,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setProfileChecked(true);
     setLoading(false);
     
-    router.refresh();
-    router.replace('/login');
-
-    // BUKA GEMBOK KEMBALI agar bisa login lagi nanti
-    setTimeout(() => {
-      cleaningUp.current = false;
-    }, 500);
+        // Paksa browser membuang semua memori dan pindah halaman dari nol
+    window.location.href = '/login'; 
   };
 
   const fetchProfile = async (email: string) => {
