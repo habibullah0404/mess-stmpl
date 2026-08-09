@@ -138,7 +138,8 @@ export default function KeuanganPage() {
       if (donasiRes.error) throw new Error(donasiRes.error.message);
       if (pengeluaranRes.error) throw new Error(pengeluaranRes.error.message);
 
-      const anggotaMap = new Map<number, string>();
+      // PERBAIKAN: UUID String map
+      const anggotaMap = new Map<string, string>();
       (anggotaRes.data as Anggota[]).forEach((a) => anggotaMap.set(a.id, a.nama));
 
       const iuranRows: IuranRow[] = (iuranRes.data as Iuran[]).map((i) => ({
@@ -296,9 +297,10 @@ export default function KeuanganPage() {
       return;
     }
     setSavingPinjaman(true);
+    // PERBAIKAN: Hapus parseInt(pinjamanForm.id_anggota) karena sekarang UUID string.
     const payload = {
       tanggal_pinjam: pinjamanForm.tanggal_pinjam,
-      id_anggota: parseInt(pinjamanForm.id_anggota, 10),
+      id_anggota: pinjamanForm.id_anggota,
       jumlah: jumlahNum,
       keterangan: pinjamanForm.keterangan.trim() || null,
       status: pinjamanForm.status,
