@@ -2,25 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import {
-  Anchor,
-  User,
-  Briefcase,
-  Ship as ShipIcon,
-  Phone,
-  Loader2,
-  AlertCircle,
-  Plus,
-  Trash2,
-  MapPin,
-  Clock,
-  Save,
-  ArrowLeft,
-  CheckCircle2,
-  Camera,
-  Upload,
-  X,
-} from 'lucide-react';
+import { Anchor, User, Briefcase, Ship as ShipIcon, Phone, Loader as Loader2, CircleAlert as AlertCircle, Plus, Trash2, MapPin, Clock, Save, ArrowLeft, CircleCheck as CheckCircle2, Camera, Upload, X } from 'lucide-react';
 import { useAuth } from '@/components/auth-provider';
 import { supabase, type Pengalaman, JENIS_KAPAL_OPTIONS, RUTE_OPTIONS, LULUSAN_TAHUN_OPTIONS } from '@/lib/supabase';
 import { Input } from '@/components/ui/input';
@@ -226,7 +208,7 @@ export default function EditProfilPage() {
     setPengalamanMsg({ type: 'success', text: 'Riwayat kapal berhasil ditambahkan.' });
   };
 
-  const handleDeletePengalaman = async (id: number) => {
+  const handleDeletePengalaman = async (id: string) => {
     const { error } = await supabase.from('Pengalaman').delete().eq('id', id);
     if (error) {
       setPengalamanMsg({ type: 'error', text: error.message });

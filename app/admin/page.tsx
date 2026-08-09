@@ -93,12 +93,12 @@ export default function AdminPage() {
   // Anggota state
   const [anggota, setAnggota] = useState<Anggota[]>([]);
   const [loadingAnggota, setLoadingAnggota] = useState(true);
-  const [updatingId, setUpdatingId] = useState<number | null>(null);
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
 
   // Iuran state
   const [iuran, setIuran] = useState<IuranRow[]>([]);
   const [loadingIuran, setLoadingIuran] = useState(true);
-  const [updatingIuranId, setUpdatingIuranId] = useState<number | null>(null);
+  const [updatingIuranId, setUpdatingIuranId] = useState<string | null>(null);
   const [iuranSearch, setIuranSearch] = useState('');
   const [iuranFilter, setIuranFilter] = useState('semua');
 
@@ -175,7 +175,7 @@ export default function AdminPage() {
     if (iuranRes.error) {
       setError(iuranRes.error.message);
     } else {
-      const anggotaMap = new Map<number, string>();
+      const anggotaMap = new Map<string, string>();
       (anggotaRes.data as Anggota[]).forEach((a) => anggotaMap.set(a.id, a.nama));
       const rows: IuranRow[] = (iuranRes.data as Iuran[]).map((i) => ({
         ...i,
@@ -209,7 +209,7 @@ export default function AdminPage() {
     if (donasiRes.error) {
       setError(donasiRes.error.message);
     } else {
-      const anggotaMap = new Map<number, string>();
+      const anggotaMap = new Map<string, string>();
       (anggotaRes.data as Anggota[]).forEach((a) => anggotaMap.set(a.id, a.nama));
       const rows: DonasiRow[] = (donasiRes.data as Donasi[]).map((d) => ({
         ...d,
@@ -246,7 +246,7 @@ export default function AdminPage() {
   }, [isAdmin, isVerified, loadAnggota, loadIuran, loadPengeluaran, loadDonasi, loadPengaturan]);
 
   // --- Anggota actions ---
-  const handleToggleVerified = async (id: number, current: boolean) => {
+  const handleToggleVerified = async (id: string, current: boolean) => {
     setUpdatingId(id);
     const { error: err } = await supabase
       .from('Anggota')
@@ -262,7 +262,7 @@ export default function AdminPage() {
     setTimeout(() => setSuccessMsg(null), 3000);
   };
 
-  const handleToggleRole = async (id: number, currentRole: string) => {
+  const handleToggleRole = async (id: string, currentRole: string) => {
     const newRole = currentRole === 'admin' ? 'member' : 'admin';
     setUpdatingId(id);
     const { error: err } = await supabase
@@ -280,7 +280,7 @@ export default function AdminPage() {
   };
 
   // --- Iuran actions ---
-  const handleTahunChange = async (id: number, newTahun: string) => {
+  const handleTahunChange = async (id: string, newTahun: string) => {
     setUpdatingIuranId(id);
     const { error: err } = await supabase
       .from('Iuran')
@@ -294,7 +294,7 @@ export default function AdminPage() {
     setIuran((prev) => prev.map((i) => (i.id === id ? { ...i, tahun: newTahun } : i)));
   };
 
-  const handleTahunDasarChange = async (id: number, newTahunDasar: string) => {
+  const handleTahunDasarChange = async (id: string, newTahunDasar: string) => {
     setUpdatingIuranId(id);
     const { error: err } = await supabase
       .from('Iuran')
@@ -337,7 +337,7 @@ export default function AdminPage() {
     }
     setSavingNewIuran(true);
     const { error: err } = await supabase.from('Iuran').insert({
-      id_anggota: parseInt(addIuranAnggota, 10),
+      id_anggota: addIuranAnggota,
       tahun: addIuranTahunDasar,
       tahun_dasar: addIuranTahunDasar,
       nominal: nominalIuran || '0',
@@ -403,7 +403,7 @@ export default function AdminPage() {
     setTimeout(() => setSuccessMsg(null), 3000);
   };
 
-  const handleDeleteExpense = async (id: number, fileUrl: string | null) => {
+  const handleDeleteExpense = async (id: string, fileUrl: string | null) => {
     if (!window.confirm('Hapus laporan pengeluaran ini?')) return;
     if (fileUrl) {
       try {
@@ -431,7 +431,7 @@ export default function AdminPage() {
     if (!donNamaAnggota || !donAcara.trim() || !donNominal.trim() || !donTanggal) return;
     setSavingDonasi(true);
     setError(null);
-    const idAnggota = parseInt(donNamaAnggota, 10);
+    const idAnggota = donNamaAnggota;
     const { data, error: insertErr } = await supabase
       .from('Donasi')
       .insert({ id_anggota: idAnggota, nama_acara: donAcara.trim(), nominal: donNominal.trim(), tanggal: donTanggal })
@@ -452,7 +452,7 @@ export default function AdminPage() {
     setTimeout(() => setSuccessMsg(null), 3000);
   };
 
-  const handleDeleteDonasi = async (id: number) => {
+  const handleDeleteDonasi = async (id: string) => {
     if (!window.confirm('Hapus data donasi ini?')) return;
     const { error: err } = await supabase.from('Donasi').delete().eq('id', id);
     if (err) {

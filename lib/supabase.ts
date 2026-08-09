@@ -6,7 +6,7 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string;
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 export type Anggota = {
-  id: number;
+  id: string;
   nama: string;
   jabatan: string | null;
   nama_pt: string | null;
@@ -29,8 +29,8 @@ export type Pengaturan = {
 };
 
 export type Iuran = {
-  id: number;
-  id_anggota: number;
+  id: string;
+  id_anggota: string;
   tahun: string;
   tahun_dasar: string | null;
   nominal: string;
@@ -39,8 +39,8 @@ export type Iuran = {
 };
 
 export type Donasi = {
-  id: number;
-  id_anggota: number;
+  id: string;
+  id_anggota: string;
   nama_acara: string;
   nominal: string;
   tanggal: string;
@@ -48,8 +48,8 @@ export type Donasi = {
 };
 
 export type Pengalaman = {
-  id: number;
-  id_anggota: number;
+  id: string;
+  id_anggota: string;
   nama_kapal: string;
   nama_perusahaan: string | null;
   jenis_kapal: string | null;
@@ -59,9 +59,9 @@ export type Pengalaman = {
 };
 
 export type Pinjaman = {
-  id: number;
+  id: string;
   tanggal_pinjam: string;
-  id_anggota: number | null;
+  id_anggota: string | null;
   jumlah: string | number;
   keterangan: string | null;
   status: string;
@@ -69,7 +69,7 @@ export type Pinjaman = {
 };
 
 export type Pengeluaran = {
-  id: number;
+  id: string;
   nama_pengeluaran: string;
   nominal: string;
   tanggal: string;

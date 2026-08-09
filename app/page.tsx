@@ -1,32 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState, useCallback } from 'react';
-import {
-  Users,
-  Search,
-  Filter,
-  Briefcase,
-  Building,
-  Phone,
-  Ship,
-  Loader2,
-  AlertCircle,
-  Clock,
-  CheckCircle2,
-  PauseCircle,
-  LayoutGrid,
-  Table as TableIcon,
-  X,
-  Lock,
-  Mail,
-  Shield,
-  Megaphone,
-  Wallet,
-  ArrowUpCircle,
-  MapPin,
-  ExternalLink,
-  User as UserIcon,
-} from 'lucide-react';
+import { Users, Search, Filter, Briefcase, Building, Phone, Ship, Loader as Loader2, CircleAlert as AlertCircle, Clock, CircleCheck as CheckCircle2, CirclePause as PauseCircle, LayoutGrid, Table as TableIcon, X, Lock, Mail, Shield, Megaphone, Wallet, CircleArrowUp as ArrowUpCircle, MapPin, ExternalLink, User as UserIcon } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { supabase, type Anggota, type Pengalaman, type Iuran, type Donasi, type Pengeluaran, getIuranStatus, fetchPengaturan, computeSaldoKas } from '@/lib/supabase';
@@ -117,7 +92,7 @@ export default function DashboardPage() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [viewMode, setViewMode] = useState<ViewMode>('card');
-  const [updatingStatusId, setUpdatingStatusId] = useState<number | null>(null);
+  const [updatingStatusId, setUpdatingStatusId] = useState<string | null>(null);
   const [iuranStatus, setIuranStatus] = useState<Iuran | null>(null);
   const [selectedProfile, setSelectedProfile] = useState<Anggota | null>(null);
   const [modalPengalaman, setModalPengalaman] = useState<Pengalaman[]>([]);

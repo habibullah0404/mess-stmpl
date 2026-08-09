@@ -2,32 +2,7 @@
 
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import {
-  Wallet,
-  Loader2,
-  AlertCircle,
-  Calendar,
-  CheckCircle2,
-  XCircle,
-  ArrowUpCircle,
-  HandHeart,
-  RotateCw,
-  TrendingUp,
-  TrendingDown,
-  Scale,
-  Receipt,
-  ExternalLink,
-  Landmark,
-  Search,
-  Filter as FilterIcon,
-  Plus,
-  Pencil,
-  Check,
-  Banknote,
-  Coins,
-  Trash2,
-  X,
-} from 'lucide-react';
+import { Wallet, Loader as Loader2, CircleAlert as AlertCircle, Calendar, CircleCheck as CheckCircle2, Circle as XCircle, CircleArrowUp as ArrowUpCircle, HandHeart, RotateCw, TrendingUp, TrendingDown, Scale, Receipt, ExternalLink, Landmark, Search, Filter as FilterIcon, Plus, Pencil, Check, Banknote, Coins, Trash2, X } from 'lucide-react';
 import {
   supabase,
   type Anggota,
@@ -105,7 +80,7 @@ export default function KeuanganPage() {
   });
   const [savingPinjaman, setSavingPinjaman] = useState(false);
   const [pinjamanMsg, setPinjamanMsg] = useState<{ type: 'error' | 'success'; text: string } | null>(null);
-  const [updatingPinjamanId, setUpdatingPinjamanId] = useState<number | null>(null);
+  const [updatingPinjamanId, setUpdatingPinjamanId] = useState<string | null>(null);
 
   const isAdmin = profile?.role === 'admin';
 
@@ -138,7 +113,7 @@ export default function KeuanganPage() {
       if (donasiRes.error) throw new Error(donasiRes.error.message);
       if (pengeluaranRes.error) throw new Error(pengeluaranRes.error.message);
 
-      const anggotaMap = new Map<number, string>();
+      const anggotaMap = new Map<string, string>();
       (anggotaRes.data as Anggota[]).forEach((a) => anggotaMap.set(a.id, a.nama));
 
       const iuranRows: IuranRow[] = (iuranRes.data as Iuran[]).map((i) => ({
@@ -298,7 +273,7 @@ export default function KeuanganPage() {
     setSavingPinjaman(true);
     const payload = {
       tanggal_pinjam: pinjamanForm.tanggal_pinjam,
-      id_anggota: parseInt(pinjamanForm.id_anggota, 10),
+      id_anggota: pinjamanForm.id_anggota,
       jumlah: jumlahNum,
       keterangan: pinjamanForm.keterangan.trim() || null,
       status: pinjamanForm.status,
