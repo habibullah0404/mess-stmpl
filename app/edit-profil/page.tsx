@@ -234,23 +234,30 @@ export default function EditProfilPage() {
     }
     setPengalaman((prev) => prev.filter((p) => p.id !== id));
   };
-
-  // --- LOGIKA BARU UNTUK FOTO ---
+  
+    // --- LOGIKA BARU UNTUK FOTO ---
   const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       const file = e.target.files[0];
+      
       if (!file.type.startsWith('image/')) {
         setPhotoMsg({ type: 'error', text: 'File harus berupa gambar.' });
+        // Reset input jika gagal
+        e.target.value = ''; 
         return;
       }
-      const reader = new FileReader();
-      reader.addEventListener('load', () => {
-        setImageSrc(reader.result?.toString() || null);
+
+      // METODE BARU: Instan & Ringan (Bebas Hang di HP)
+      try {
+        const imageUrl = URL.createObjectURL(file);
+        setImageSrc(imageUrl);
         setIsCropModalOpen(true);
-      });
-      reader.readAsDataURL(file);
+      } catch (error) {
+        setPhotoMsg({ type: 'error', text: 'Gagal memuat foto dari perangkat.' });
+      }
     }
-    e.target.value = ''; // Reset input
+    
+    e.target.value = ''; // Reset input agar bisa memilih foto yang sama lagi jika batal
   };
 
   const onCropComplete = useCallback((croppedArea: any, croppedAreaPixels: any) => {
