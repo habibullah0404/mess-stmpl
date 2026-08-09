@@ -37,39 +37,48 @@ import {
 // Import Library Crop Foto
 import Cropper from 'react-easy-crop';
 
-// --- FUNGSI KANVAS UNTUK KOMPRESI FOTO (ANTI HANG) ---
+// --- FUNGSI KANVAS ANTI MACET UNTUK HP ANDROID ---
 const createImage = (url: string): Promise<HTMLImageElement> =>
   new Promise((resolve, reject) => {
     const image = new Image();
-    image.addEventListener('load', () => resolve(image));
-    image.addEventListener('error', (error) => reject(error));
-    // Tidak perlu crossOrigin untuk file dari HP sendiri
+    // Tambahkan pengaman batas waktu 10 detik agar tidak macet selamanya
+    const timeout = setTimeout(() => {
+      reject(new Error('Gagal memuat pratinjau gambar (Timeout)'));
+    }, 10000);
+
+    image.addEventListener('load', () => {
+      clearTimeout(timeout);
+      resolve(image);
+    });
+    image.addEventListener('error', (error) => {
+      clearTimeout(timeout);
+      reject(error);
+    });
     image.src = url;
   });
 
-// Fungsi pengubah Teks ke File murni (Mencegah macet di HP)
-function dataURLtoFile(dataurl: string, filename: string): File {
+// FUNGSI INTI: Mengubah DataURL langsung menjadi Data Biner Mentah (Uint8Array)
+// Ini adalah "Peluru Perak" agar HP tidak macet saat membaca File buatan
+function dataURLtoUint8Array(dataurl: string): Uint8Array {
   const arr = dataurl.split(',');
-  const mime = arr[0].match(/:(.*?);/)?.[1] || 'image/jpeg';
   const bstr = atob(arr[1]);
   let n = bstr.length;
   const u8arr = new Uint8Array(n);
   while (n--) {
     u8arr[n] = bstr.charCodeAt(n);
   }
-  return new File([u8arr], filename, { type: mime });
+  return u8arr;
 }
 
-async function getCroppedImg(
+async function getCroppedImgBinary(
   imageSrc: string,
   pixelCrop: { x: number; y: number; width: number; height: number }
-): Promise<File | null> {
+): Promise<Uint8Array | null> {
   const image = await createImage(imageSrc);
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d');
   if (!ctx) return null;
 
-  // Ukuran target foto profil (400x400 px) -> Membuat file sangat kecil!
   const targetSize = 400;
   canvas.width = targetSize;
   canvas.height = targetSize;
@@ -86,9 +95,8 @@ async function getCroppedImg(
     targetSize
   );
 
-  // Menggunakan toDataURL yang berjalan sinkron dan langsung selesai
   const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-  return dataURLtoFile(dataUrl, 'avatar.jpeg');
+  return dataURLtoUint8Array(dataUrl);
 }
 // ----------------------------------------
 
@@ -119,6 +127,7 @@ export default function EditProfilPage() {
 
   // --- STATE UNTUK CROP & UPLOAD FOTO ---
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [uploadStep, setUploadStep] = useState<string | null>(null); // State baru untuk melacak titik macet
   const [photoMsg, setPhotoMsg] = useState<{ type: 'error' | 'success'; text: string } | null>(null);
   
   const [imageSrc, setImageSrc] = useState<string | null>(null);
@@ -262,10 +271,9 @@ export default function EditProfilPage() {
         setImageSrc(imageUrl);
         setIsCropModalOpen(true);
       } catch (error) {
-        setPhotoMsg({ type: 'error', text: 'Gagal memuat foto dari perangkat.' });
+        setPhotoMsg({ type: 'error', text: 'Gagal memuat pratinjau.' });
       }
     }
-    
     e.target.value = ''; 
   };
 
@@ -280,47 +288,49 @@ export default function EditProfilPage() {
     setPhotoMsg(null);
 
     try {
-      // 1. Potong dan Kompres Foto (Menghasilkan File yang aman)
-      const croppedFile = await getCroppedImg(imageSrc, croppedAreaPixels);
-      if (!croppedFile) throw new Error('Gagal memproses foto.');
+      // TAHAP 1: Memotong
+      setUploadStep('Memotong foto...');
+      const rawBinaryData = await getCroppedImgBinary(imageSrc, croppedAreaPixels);
+      if (!rawBinaryData) throw new Error('Gagal memproses kanvas foto.');
 
-      // 2. Siapkan File untuk Supabase
+      // TAHAP 2: Mengunggah
+      setUploadStep('Mengunggah ke server...');
       const filePath = `${user.id}/avatar-${Date.now()}.jpeg`;
-
-      // 3. Upload ke Supabase
+      
+      // Kita kirimkan rawBinaryData (Uint8Array) murni, bukan File/Blob!
       const { error: uploadErr } = await supabase.storage
         .from('profile-photos')
-        .upload(filePath, croppedFile, { 
+        .upload(filePath, rawBinaryData, { 
           cacheControl: '3600', 
           upsert: false,
-          contentType: 'image/jpeg' // Wajib agar server mengenali format file
+          contentType: 'image/jpeg' 
         });
 
-      if (uploadErr) throw uploadErr;
+      if (uploadErr) {
+        throw new Error(`Upload gagal: ${uploadErr.message}`);
+      }
 
-      // 4. Dapatkan URL Publik
+      // TAHAP 3: Menyimpan ke Database
+      setUploadStep('Menyimpan data profil...');
       const { data: urlData } = supabase.storage.from('profile-photos').getPublicUrl(filePath);
       const newFotoUrl = urlData.publicUrl;
 
-      // 5. Update Database Anggota
       const oldFotoUrl = profile.foto_url;
       const { error: dbErr } = await supabase
         .from('Anggota')
         .update({ foto_url: newFotoUrl })
         .eq('id', profile.id);
 
-      if (dbErr) throw dbErr;
+      if (dbErr) {
+        throw new Error(`Database error: ${dbErr.message}`);
+      }
 
-      // 6. Hapus Foto Lama (Opsional)
+      // Opsional: Hapus foto lama
       if (oldFotoUrl) {
         try {
           const oldPath = oldFotoUrl.split('/profile-photos/')[1];
-          if (oldPath) {
-            await supabase.storage.from('profile-photos').remove([oldPath]);
-          }
-        } catch {
-          // Abaikan jika gagal menghapus
-        }
+          if (oldPath) await supabase.storage.from('profile-photos').remove([oldPath]);
+        } catch { /* Abaikan error hapus */ }
       }
 
       setPhotoMsg({ type: 'success', text: 'Foto profil berhasil diperbarui.' });
@@ -329,9 +339,10 @@ export default function EditProfilPage() {
       await refreshProfile();
 
     } catch (error: any) {
-      setPhotoMsg({ type: 'error', text: error.message || 'Terjadi kesalahan saat mengunggah foto.' });
+      setPhotoMsg({ type: 'error', text: error.message || 'Terjadi kesalahan sistem.' });
     } finally {
       setUploadingPhoto(false);
+      setUploadStep(null);
     }
   };
   // --------------------------------
@@ -360,6 +371,7 @@ export default function EditProfilPage() {
               <button 
                 onClick={() => { setIsCropModalOpen(false); setImageSrc(null); }} 
                 className="rounded-full p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+                disabled={uploadingPhoto}
               >
                 <X className="h-5 w-5" />
               </button>
@@ -383,6 +395,13 @@ export default function EditProfilPage() {
               <span className="text-xs text-slate-500">Gunakan dua jari untuk Zoom (atau geser foto)</span>
             </div>
 
+            {/* Banner Error di dalam Modal */}
+            {photoMsg && photoMsg.type === 'error' && (
+               <div className="mt-4">
+                  <MsgBanner type="error" text={photoMsg.text} />
+               </div>
+            )}
+
             <div className="mt-6 flex justify-end gap-3">
               <Button 
                 variant="outline" 
@@ -393,13 +412,13 @@ export default function EditProfilPage() {
               </Button>
               <Button 
                 onClick={handleCropAndSave} 
-                className="bg-blue-900 hover:bg-blue-800" 
+                className="bg-blue-900 min-w-[140px] hover:bg-blue-800" 
                 disabled={uploadingPhoto}
               >
                 {uploadingPhoto ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Memproses...
+                    <span className="text-xs">{uploadStep || 'Memproses...'}</span>
                   </>
                 ) : (
                   "Simpan Foto"
@@ -467,7 +486,7 @@ export default function EditProfilPage() {
                 <p className="mt-2 text-xs text-slate-400">
                   Pilih foto apa saja. Anda bisa memotongnya di langkah selanjutnya.
                 </p>
-                {photoMsg && <MsgBanner type={photoMsg.type} text={photoMsg.text} />}
+                {photoMsg && !isCropModalOpen && <MsgBanner type={photoMsg.type} text={photoMsg.text} />}
               </div>
             </div>
           </CardContent>
