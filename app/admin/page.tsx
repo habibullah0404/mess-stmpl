@@ -93,11 +93,13 @@ export default function AdminPage() {
   // Anggota state
   const [anggota, setAnggota] = useState<Anggota[]>([]);
   const [loadingAnggota, setLoadingAnggota] = useState(true);
-  const [updatingId, setUpdatingId] = useState<number | null>(null);
+  // PERBAIKAN: updatingId diubah jadi string karena UUID anggota adalah teks
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
 
   // Iuran state
   const [iuran, setIuran] = useState<IuranRow[]>([]);
   const [loadingIuran, setLoadingIuran] = useState(true);
+  // Iuran ID masih angka di database, jadi tetap number
   const [updatingIuranId, setUpdatingIuranId] = useState<number | null>(null);
   const [iuranSearch, setIuranSearch] = useState('');
   const [iuranFilter, setIuranFilter] = useState('semua');
@@ -175,7 +177,8 @@ export default function AdminPage() {
     if (iuranRes.error) {
       setError(iuranRes.error.message);
     } else {
-      const anggotaMap = new Map<number, string>();
+      // PERBAIKAN: Map diubah menjadi <string, string> untuk menerima id anggota bertipe UUID
+      const anggotaMap = new Map<string, string>();
       (anggotaRes.data as Anggota[]).forEach((a) => anggotaMap.set(a.id, a.nama));
       const rows: IuranRow[] = (iuranRes.data as Iuran[]).map((i) => ({
         ...i,
@@ -209,7 +212,8 @@ export default function AdminPage() {
     if (donasiRes.error) {
       setError(donasiRes.error.message);
     } else {
-      const anggotaMap = new Map<number, string>();
+      // PERBAIKAN: Map diubah menjadi <string, string> untuk menerima id anggota bertipe UUID
+      const anggotaMap = new Map<string, string>();
       (anggotaRes.data as Anggota[]).forEach((a) => anggotaMap.set(a.id, a.nama));
       const rows: DonasiRow[] = (donasiRes.data as Donasi[]).map((d) => ({
         ...d,
@@ -246,7 +250,8 @@ export default function AdminPage() {
   }, [isAdmin, isVerified, loadAnggota, loadIuran, loadPengeluaran, loadDonasi, loadPengaturan]);
 
   // --- Anggota actions ---
-  const handleToggleVerified = async (id: number, current: boolean) => {
+  // PERBAIKAN: Ubah id parameter menjadi string
+  const handleToggleVerified = async (id: string, current: boolean) => {
     setUpdatingId(id);
     const { error: err } = await supabase
       .from('Anggota')
@@ -262,7 +267,8 @@ export default function AdminPage() {
     setTimeout(() => setSuccessMsg(null), 3000);
   };
 
-  const handleToggleRole = async (id: number, currentRole: string) => {
+  // PERBAIKAN: Ubah id parameter menjadi string
+  const handleToggleRole = async (id: string, currentRole: string) => {
     const newRole = currentRole === 'admin' ? 'member' : 'admin';
     setUpdatingId(id);
     const { error: err } = await supabase
@@ -336,8 +342,9 @@ export default function AdminPage() {
       return;
     }
     setSavingNewIuran(true);
+    // PERBAIKAN: Hapus parseInt() karena id_anggota adalah string UUID
     const { error: err } = await supabase.from('Iuran').insert({
-      id_anggota: parseInt(addIuranAnggota, 10),
+      id_anggota: addIuranAnggota, 
       tahun: addIuranTahunDasar,
       tahun_dasar: addIuranTahunDasar,
       nominal: nominalIuran || '0',
@@ -431,7 +438,8 @@ export default function AdminPage() {
     if (!donNamaAnggota || !donAcara.trim() || !donNominal.trim() || !donTanggal) return;
     setSavingDonasi(true);
     setError(null);
-    const idAnggota = parseInt(donNamaAnggota, 10);
+    // PERBAIKAN: Hapus parseInt() karena id anggota (donNamaAnggota) adalah string UUID
+    const idAnggota = donNamaAnggota; 
     const { data, error: insertErr } = await supabase
       .from('Donasi')
       .insert({ id_anggota: idAnggota, nama_acara: donAcara.trim(), nominal: donNominal.trim(), tanggal: donTanggal })
