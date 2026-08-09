@@ -42,9 +42,14 @@ const createImage = (url: string): Promise<HTMLImageElement> =>
   new Promise((resolve, reject) => {
     const image = new Image();
     image.addEventListener('load', () => resolve(image));
-    image.addEventListener('error', (error) => reject(error);
+    image.addEventListener('error', (error) => reject(error));
+    
+    // HAPUS BARIS crossOrigin DI SINI. 
+    // Kita tidak membutuhkannya untuk file lokal dari HP.
+
     image.src = url;
   });
+
 
 async function getCroppedImg(
   imageSrc: string,
