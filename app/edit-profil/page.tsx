@@ -37,24 +37,33 @@ import {
 // Import Library Crop Foto
 import Cropper from 'react-easy-crop';
 
-// --- FUNGSI KANVAS UNTUK KOMPRESI FOTO ---
+// --- FUNGSI KANVAS UNTUK KOMPRESI FOTO (ANTI HANG) ---
 const createImage = (url: string): Promise<HTMLImageElement> =>
   new Promise((resolve, reject) => {
     const image = new Image();
     image.addEventListener('load', () => resolve(image));
     image.addEventListener('error', (error) => reject(error));
-    
-    // HAPUS BARIS crossOrigin DI SINI. 
-    // Kita tidak membutuhkannya untuk file lokal dari HP.
-
+    // Tidak perlu crossOrigin untuk file dari HP sendiri
     image.src = url;
   });
 
+// Fungsi pengubah Teks ke File murni (Mencegah macet di HP)
+function dataURLtoFile(dataurl: string, filename: string): File {
+  const arr = dataurl.split(',');
+  const mime = arr[0].match(/:(.*?);/)?.[1] || 'image/jpeg';
+  const bstr = atob(arr[1]);
+  let n = bstr.length;
+  const u8arr = new Uint8Array(n);
+  while (n--) {
+    u8arr[n] = bstr.charCodeAt(n);
+  }
+  return new File([u8arr], filename, { type: mime });
+}
 
 async function getCroppedImg(
   imageSrc: string,
   pixelCrop: { x: number; y: number; width: number; height: number }
-): Promise<Blob | null> {
+): Promise<File | null> {
   const image = await createImage(imageSrc);
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d');
@@ -77,11 +86,9 @@ async function getCroppedImg(
     targetSize
   );
 
-  return new Promise((resolve) => {
-    canvas.toBlob((blob) => {
-      resolve(blob);
-    }, 'image/jpeg', 0.8); // Kompresi JPEG kualitas 80%
-  });
+  // Menggunakan toDataURL yang berjalan sinkron dan langsung selesai
+  const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+  return dataURLtoFile(dataUrl, 'avatar.jpeg');
 }
 // ----------------------------------------
 
@@ -239,19 +246,17 @@ export default function EditProfilPage() {
     setPengalaman((prev) => prev.filter((p) => p.id !== id));
   };
   
-    // --- LOGIKA BARU UNTUK FOTO ---
+  // --- LOGIKA BARU UNTUK FOTO ---
   const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       const file = e.target.files[0];
       
       if (!file.type.startsWith('image/')) {
         setPhotoMsg({ type: 'error', text: 'File harus berupa gambar.' });
-        // Reset input jika gagal
         e.target.value = ''; 
         return;
       }
 
-      // METODE BARU: Instan & Ringan (Bebas Hang di HP)
       try {
         const imageUrl = URL.createObjectURL(file);
         setImageSrc(imageUrl);
@@ -261,7 +266,7 @@ export default function EditProfilPage() {
       }
     }
     
-    e.target.value = ''; // Reset input agar bisa memilih foto yang sama lagi jika batal
+    e.target.value = ''; 
   };
 
   const onCropComplete = useCallback((croppedArea: any, croppedAreaPixels: any) => {
@@ -275,18 +280,21 @@ export default function EditProfilPage() {
     setPhotoMsg(null);
 
     try {
-      // 1. Potong dan Kompres Foto
-      const croppedBlob = await getCroppedImg(imageSrc, croppedAreaPixels);
-      if (!croppedBlob) throw new Error('Gagal memproses foto.');
+      // 1. Potong dan Kompres Foto (Menghasilkan File yang aman)
+      const croppedFile = await getCroppedImg(imageSrc, croppedAreaPixels);
+      if (!croppedFile) throw new Error('Gagal memproses foto.');
 
       // 2. Siapkan File untuk Supabase
-      const fileExt = 'jpeg';
-      const filePath = `${user.id}/avatar-${Date.now()}.${fileExt}`;
+      const filePath = `${user.id}/avatar-${Date.now()}.jpeg`;
 
       // 3. Upload ke Supabase
       const { error: uploadErr } = await supabase.storage
         .from('profile-photos')
-        .upload(filePath, croppedBlob, { cacheControl: '3600', upsert: false });
+        .upload(filePath, croppedFile, { 
+          cacheControl: '3600', 
+          upsert: false,
+          contentType: 'image/jpeg' // Wajib agar server mengenali format file
+        });
 
       if (uploadErr) throw uploadErr;
 
@@ -303,7 +311,7 @@ export default function EditProfilPage() {
 
       if (dbErr) throw dbErr;
 
-      // 6. Hapus Foto Lama (Opsional, agar tidak memenuhi storage)
+      // 6. Hapus Foto Lama (Opsional)
       if (oldFotoUrl) {
         try {
           const oldPath = oldFotoUrl.split('/profile-photos/')[1];
