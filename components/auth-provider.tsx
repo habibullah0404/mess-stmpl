@@ -99,6 +99,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const { data, error } = await supabase.auth.getSession();
 
         if (error) {
+          // PERBAIKAN: Deteksi spesifik untuk token kedaluwarsa/hilang
+          if (error.message.includes('Refresh Token Not Found') || error.message.includes('Invalid Refresh Token')) {
+            console.error('Sesi terdeteksi rusak/invalid. Membersihkan paksa...');
+          }
           await cleanupAndRedirect();
           return;
         }
@@ -111,6 +115,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (expiresAt && expiresAt < now) {
             const { error: refreshError } = await supabase.auth.refreshSession();
             if (refreshError) {
+              console.error('Gagal refresh token:', refreshError.message);
               await cleanupAndRedirect();
               return;
             }
@@ -140,7 +145,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setProfile(null);
           setProfileChecked(true);
         }
-      } catch {
+      } catch (err) {
+        console.error('Error saat inisialisasi sesi:', err);
         await cleanupAndRedirect();
       } finally {
         setLoading(false);
