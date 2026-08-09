@@ -49,7 +49,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setProfile(null);
     setProfileChecked(true);
     setLoading(false);
-    router.replace('/login');
+    
+    // PERBAIKAN: Gunakan Hard Refresh agar memori benar-benar bersih
+    window.location.href = '/login'; 
   };
 
   const fetchProfile = async (email: string) => {
@@ -197,7 +199,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
+    // PERBAIKAN: Tambahkan pengecekan agar tidak terjadi double-trigger
+    if (cleaningUp.current) return;
     cleaningUp.current = true;
+    
     try {
       await supabase.auth.signOut();
     } catch {
@@ -208,11 +213,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch {
       // abaikan error
     }
+    
     setSession(null);
     setProfile(null);
     setProfileChecked(true);
     setLoading(false);
-    router.replace('/login');
+    
+    // PERBAIKAN: Gunakan Hard Refresh
+    window.location.href = '/login';
   };
 
   const value: AuthContextValue = {
