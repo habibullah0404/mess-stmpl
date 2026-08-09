@@ -198,8 +198,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error: error?.message ?? null };
   };
 
-      const signOut = async () => {
+  const signOut = async () => {
+    if (cleaningUp.current) return;
     cleaningUp.current = true;
+    
     try {
       await supabase.auth.signOut();
     } catch {
@@ -210,19 +212,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch {
       // abaikan error
     }
+    
     setSession(null);
     setProfile(null);
     setProfileChecked(true);
     setLoading(false);
     
-    router.refresh();
-    router.replace('/login');
-
-    // BUKA GEMBOK KEMBALI agar bisa login lagi nanti
-    setTimeout(() => {
-      cleaningUp.current = false;
-    }, 500);
+    // Paksa browser membuang semua memori dan pindah halaman dari nol
+    window.location.href = '/login'; 
   };
+
 
   const value: AuthContextValue = {
     session,
