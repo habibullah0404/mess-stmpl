@@ -48,9 +48,11 @@ const createImage = (url: string): Promise<HTMLImageElement> =>
     });
 
       // Jangan gunakan crossOrigin untuk URL data: atau blob: (dari createObjectURL)
+    
+    // Jangan gunakan crossOrigin untuk URL data: atau blob: (dari createObjectURL)
     if (!url.startsWith('data:') && !url.startsWith('blob:')) {
       image.setAttribute('crossOrigin', 'anonymous');
-  });
+    }
 
 async function getCroppedImg(
   imageSrc: string,
