@@ -23,9 +23,35 @@ import Cropper from 'react-easy-crop';
 const createImage = (url: string): Promise<HTMLImageElement> =>
   new Promise((resolve, reject) => {
     const image = new Image();
-    image.addEventListener('load', () => resolve(image));
-    image.addEventListener('error', (error) => reject(error));
-    image.setAttribute('crossOrigin', 'anonymous');
+    let settled = false;
+
+    const timeout = setTimeout(() => {
+      if (!settled) {
+        settled = true;
+        reject(new Error('Timeout memuat gambar (15 detik). File mungkin terlalu besar.'));
+      }
+    }, 15000);
+
+    image.addEventListener('load', () => {
+      if (!settled) {
+        settled = true;
+        clearTimeout(timeout);
+        resolve(image);
+      }
+    });
+    image.addEventListener('error', () => {
+      if (!settled) {
+        settled = true;
+        clearTimeout(timeout);
+        reject(new Error('Gagal memuat gambar. Format mungkin tidak didukung browser.'));
+      }
+    });
+
+    // crossOrigin hanya untuk URL eksternal, JANGAN untuk data: URL
+    // (crossOrigin pada data URL dapat men-taint canvas di beberapa browser)
+    if (!url.startsWith('data:')) {
+      image.setAttribute('crossOrigin', 'anonymous');
+    }
     image.src = url;
   });
 
@@ -55,10 +81,23 @@ async function getCroppedImg(
     targetSize
   );
 
+  // toBlob dengan timeout safety — jika browser gagal encode, resolve null
   return new Promise((resolve) => {
+    let done = false;
+    const timeout = setTimeout(() => {
+      if (!done) {
+        done = true;
+        resolve(null);
+      }
+    }, 10000);
+
     canvas.toBlob((blob) => {
-      resolve(blob);
-    }, 'image/jpeg', 0.8); // Kompresi JPEG kualitas 80%
+      if (!done) {
+        done = true;
+        clearTimeout(timeout);
+        resolve(blob);
+      }
+    }, 'image/jpeg', 0.8);
   });
 }
 // ----------------------------------------
@@ -219,20 +258,46 @@ export default function EditProfilPage() {
 
   // --- LOGIKA BARU UNTUK FOTO ---
   const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      const file = e.target.files[0];
-      if (!file.type.startsWith('image/')) {
-        setPhotoMsg({ type: 'error', text: 'File harus berupa gambar.' });
+    // Ambil referensi file SEBELUM reset input — reset di sini aman
+    // karena kita sudah punya objek File di variabel `file`.
+    // (Sebelumnya reset di luar if menyebabkan FileReader abort di mobile)
+    const file = e.target.files?.[0];
+    e.target.value = '';
+
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      setPhotoMsg({ type: 'error', text: 'File harus berupa gambar.' });
+      return;
+    }
+
+    // Validasi ukuran (maks 20MB untuk mencegah hang di mobile)
+    if (file.size > 20 * 1024 * 1024) {
+      setPhotoMsg({ type: 'error', text: 'Ukuran file terlalu besar (maks 20MB). Silakan pilih foto yang lebih kecil.' });
+      return;
+    }
+
+    // Tampilkan loading selama FileReader bekerja (terutama untuk foto kamera yang besar)
+    setUploadingPhoto(true);
+    setPhotoMsg(null);
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result?.toString();
+      if (!result) {
+        setPhotoMsg({ type: 'error', text: 'Gagal membaca file gambar.' });
+        setUploadingPhoto(false);
         return;
       }
-      const reader = new FileReader();
-      reader.addEventListener('load', () => {
-        setImageSrc(reader.result?.toString() || null);
-        setIsCropModalOpen(true);
-      });
-      reader.readAsDataURL(file);
-    }
-    e.target.value = ''; // Reset input
+      setImageSrc(result);
+      setIsCropModalOpen(true);
+      setUploadingPhoto(false); // crop modal terbuka, loading selesai
+    };
+    reader.onerror = () => {
+      setPhotoMsg({ type: 'error', text: 'Gagal membaca file. File mungkin rusak atau terlalu besar.' });
+      setUploadingPhoto(false);
+    };
+    reader.readAsDataURL(file);
   };
 
   const onCropComplete = useCallback((croppedArea: any, croppedAreaPixels: any) => {
@@ -240,15 +305,20 @@ export default function EditProfilPage() {
   }, []);
 
   const handleCropAndSave = async () => {
-    if (!imageSrc || !croppedAreaPixels || !profile || !user) return;
-    
+    if (!imageSrc || !profile || !user) return;
+
+    if (!croppedAreaPixels) {
+      setPhotoMsg({ type: 'error', text: 'Posisi crop belum siap. Tunggu sebentar lalu coba lagi.' });
+      return;
+    }
+
     setUploadingPhoto(true);
     setPhotoMsg(null);
 
     try {
       // 1. Potong dan Kompres Foto
       const croppedBlob = await getCroppedImg(imageSrc, croppedAreaPixels);
-      if (!croppedBlob) throw new Error('Gagal memproses foto.');
+      if (!croppedBlob) throw new Error('Gagal memproses foto. Browser mungkin kehabisan memori — coba foto yang lebih kecil.');
 
       // 2. Siapkan File untuk Supabase
       const fileExt = 'jpeg';
@@ -292,7 +362,11 @@ export default function EditProfilPage() {
       await refreshProfile();
 
     } catch (error: any) {
-      setPhotoMsg({ type: 'error', text: error.message || 'Terjadi kesalahan saat mengunggah foto.' });
+      const msg =
+        error?.message ||
+        (typeof error === 'string' ? error : null) ||
+        'Terjadi kesalahan saat mengunggah foto.';
+      setPhotoMsg({ type: 'error', text: msg });
     } finally {
       setUploadingPhoto(false);
     }
