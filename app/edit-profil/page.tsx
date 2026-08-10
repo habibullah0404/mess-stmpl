@@ -304,12 +304,12 @@ export default function EditProfilPage() {
       setPhotoMsg({ type: 'success', text: 'Foto profil berhasil diperbarui.' });
       setIsCropModalOpen(false);
       
-            // TAMBAHKAN INI UNTUK MEMBERSIHKAN MEMORI
-      if (typeof imageSrc === 'string' && imageSrc.startsWith('blob:')) {
-        URL.revokeObjectURL(imageSrc);
+      // TAMBAHKAN INI UNTUK MEMBERSIHKAN MEMORI
+      const currentSrc = imageSrc as string;
+      if (currentSrc && currentSrc.startsWith('blob:')) {
+        URL.revokeObjectURL(currentSrc);
       }
 
-      
       setImageSrc(null);
       await refreshProfile();
 
