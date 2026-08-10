@@ -47,12 +47,9 @@ const createImage = (url: string): Promise<HTMLImageElement> =>
       }
     });
 
-    // crossOrigin hanya untuk URL eksternal, JANGAN untuk data: URL
-    // (crossOrigin pada data URL dapat men-taint canvas di beberapa browser)
-    if (!url.startsWith('data:')) {
+      // Jangan gunakan crossOrigin untuk URL data: atau blob: (dari createObjectURL)
+    if (!url.startsWith('data:') && !url.startsWith('blob:')) {
       image.setAttribute('crossOrigin', 'anonymous');
-    }
-    image.src = url;
   });
 
 async function getCroppedImg(
@@ -258,46 +255,37 @@ export default function EditProfilPage() {
 
   // --- LOGIKA BARU UNTUK FOTO ---
   const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    // Ambil referensi file SEBELUM reset input — reset di sini aman
-    // karena kita sudah punya objek File di variabel `file`.
-    // (Sebelumnya reset di luar if menyebabkan FileReader abort di mobile)
     const file = e.target.files?.[0];
     e.target.value = '';
 
     if (!file) return;
 
-    if (!file.type.startsWith('image/')) {
+    // Perbaikan: HP Android kadang mengosongkan tipe MIME dari Galeri.
+    // Kita buat logikanya lebih longgar agar tidak langsung ditolak.
+    if (file.type && !file.type.startsWith('image/')) {
       setPhotoMsg({ type: 'error', text: 'File harus berupa gambar.' });
       return;
     }
 
-    // Validasi ukuran (maks 20MB untuk mencegah hang di mobile)
     if (file.size > 20 * 1024 * 1024) {
-      setPhotoMsg({ type: 'error', text: 'Ukuran file terlalu besar (maks 20MB). Silakan pilih foto yang lebih kecil.' });
+      setPhotoMsg({ type: 'error', text: 'Ukuran file terlalu besar (maks 20MB).' });
       return;
     }
 
-    // Tampilkan loading selama FileReader bekerja (terutama untuk foto kamera yang besar)
     setUploadingPhoto(true);
     setPhotoMsg(null);
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result?.toString();
-      if (!result) {
-        setPhotoMsg({ type: 'error', text: 'Gagal membaca file gambar.' });
-        setUploadingPhoto(false);
-        return;
-      }
-      setImageSrc(result);
+    // Perbaikan: Menggunakan URL.createObjectURL sangat ringan dan mencegah 
+    // browser HP (WebView/Chrome) kehabisan RAM lalu crash diam-diam.
+    try {
+      const objectUrl = URL.createObjectURL(file);
+      setImageSrc(objectUrl);
       setIsCropModalOpen(true);
-      setUploadingPhoto(false); // crop modal terbuka, loading selesai
-    };
-    reader.onerror = () => {
-      setPhotoMsg({ type: 'error', text: 'Gagal membaca file. File mungkin rusak atau terlalu besar.' });
+    } catch (error) {
+      setPhotoMsg({ type: 'error', text: 'Gagal memuat gambar dari memori HP.' });
+    } finally {
       setUploadingPhoto(false);
-    };
-    reader.readAsDataURL(file);
+    }
   };
 
   const onCropComplete = useCallback((croppedArea: any, croppedAreaPixels: any) => {
@@ -310,6 +298,18 @@ export default function EditProfilPage() {
     if (!croppedAreaPixels) {
       setPhotoMsg({ type: 'error', text: 'Posisi crop belum siap. Tunggu sebentar lalu coba lagi.' });
       return;
+            // ... (kode upload Supabase di handleCropAndSave)
+      setPhotoMsg({ type: 'success', text: 'Foto profil berhasil diperbarui.' });
+      setIsCropModalOpen(false);
+      
+      // TAMBAHKAN INI UNTUK MEMBERSIHKAN MEMORI
+      if (imageSrc && imageSrc.startsWith('blob:')) {
+        URL.revokeObjectURL(imageSrc);
+      }
+      
+      setImageSrc(null);
+      await refreshProfile();
+
     }
 
     setUploadingPhoto(true);
