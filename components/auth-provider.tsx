@@ -188,9 +188,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false);
     });
 
+    const handleVisibilityChange = async () => {
+      if (document.visibilityState !== 'visible' || cleaningUp.current) return;
+      try {
+        const { data, error } = await supabase.auth.getSession();
+        if (error) {
+          await cleanupAndRedirect();
+          return;
+        }
+        if (data.session) {
+          const expiresAt = data.session.expires_at;
+          const now = Math.floor(Date.now() / 1000);
+          if (expiresAt && expiresAt < now) {
+            const { error: refreshError } = await supabase.auth.refreshSession();
+            if (refreshError) {
+              await cleanupAndRedirect();
+              return;
+            }
+          }
+          setSession(data.session);
+          if (data.session.user?.email) {
+            await fetchProfile(data.session.user.email);
+          }
+        }
+      } catch {
+        // abaikan error saat bangunkan koneksi
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
     return () => {
       if (timeoutId) clearTimeout(timeoutId);
       listener.subscription.unsubscribe();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [router]);
 

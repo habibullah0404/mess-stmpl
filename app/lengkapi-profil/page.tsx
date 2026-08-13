@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Anchor, User, Briefcase, Ship, Phone, Mail, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { useAuth } from '@/components/auth-provider';
 import { supabase, LULUSAN_TAHUN_OPTIONS } from '@/lib/supabase';
+import { withTimeout } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -41,29 +42,35 @@ export default function LengkapiProfilPage() {
     }
     setLoading(true);
 
-    const { data, error: err } = await supabase
-      .from('Anggota')
-      .upsert({
-        id: user.id,
-        nama: nama.trim(),
-        jabatan: jabatan.trim() || null,
-        nama_pt: namaPt.trim() || null,
-        status_bekerja: statusBekerja,
-        info_kontak: infoKontak.trim() || null,
-        email: user.email,
-        role: 'member',
-        lulusan_tahun: lulusanTahun || null,
-      }, { onConflict: 'id' })
-      .select('id, nama, email, role')
-      .single();
-      
-    setLoading(false);
-    if (err) {
-      setError(err.message);
-      return;
+    try {
+      const { data, error: err } = await withTimeout(
+        supabase
+          .from('Anggota')
+          .upsert({
+            id: user.id,
+            nama: nama.trim(),
+            jabatan: jabatan.trim() || null,
+            nama_pt: namaPt.trim() || null,
+            status_bekerja: statusBekerja,
+            info_kontak: infoKontak.trim() || null,
+            email: user.email,
+            role: 'member',
+            lulusan_tahun: lulusanTahun || null,
+          }, { onConflict: 'id' })
+          .select('id, nama, email, role')
+          .single()
+      );
+      if (err) {
+        setError(err.message);
+        return;
+      }
+      await refreshProfile();
+      router.push('/');
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Gagal menyimpan profil');
+    } finally {
+      setLoading(false);
     }
-    await refreshProfile();
-    router.push('/');
   };
 
   return (

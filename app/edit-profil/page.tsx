@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Anchor, User, Briefcase, Ship as ShipIcon, Phone, Loader as Loader2, CircleAlert as AlertCircle, Plus, Trash2, MapPin, Clock, Save, ArrowLeft, CircleCheck as CheckCircle2, Camera, Upload, X } from 'lucide-react';
 import { useAuth } from '@/components/auth-provider';
 import { supabase, type Pengalaman, JENIS_KAPAL_OPTIONS, RUTE_OPTIONS, LULUSAN_TAHUN_OPTIONS } from '@/lib/supabase';
+import { withTimeout } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -160,21 +161,36 @@ export default function EditProfilPage() {
   const loadPengalaman = useCallback(async () => {
     if (!profile) return;
     setLoadingPengalaman(true);
-    const { data, error } = await supabase
-      .from('Pengalaman')
-      .select('id, id_anggota, nama_kapal, nama_perusahaan, jenis_kapal, rute, durasi, created_at')
-      .eq('id_anggota', profile.id)
-      .order('created_at', { ascending: false });
-    setLoadingPengalaman(false);
-    if (error) {
-      setPengalamanMsg({ type: 'error', text: error.message });
-      return;
+    try {
+      const { data, error } = await withTimeout(
+        supabase
+          .from('Pengalaman')
+          .select('id, id_anggota, nama_kapal, nama_perusahaan, jenis_kapal, rute, durasi, created_at')
+          .eq('id_anggota', profile.id)
+          .order('created_at', { ascending: false })
+      );
+      if (error) {
+        setPengalamanMsg({ type: 'error', text: error.message });
+        return;
+      }
+      setPengalaman((data as Pengalaman[]) ?? []);
+    } catch (e: unknown) {
+      setPengalamanMsg({ type: 'error', text: e instanceof Error ? e.message : 'Gagal memuat riwayat kapal' });
+    } finally {
+      setLoadingPengalaman(false);
     }
-    setPengalaman((data as Pengalaman[]) ?? []);
   }, [profile]);
 
   useEffect(() => {
     loadPengalaman();
+  }, [loadPengalaman]);
+
+  useEffect(() => {
+    const onFocus = () => {
+      if (document.visibilityState === 'visible') loadPengalaman();
+    };
+    document.addEventListener('visibilitychange', onFocus);
+    return () => document.removeEventListener('visibilitychange', onFocus);
   }, [loadPengalaman]);
 
   const handleSaveProfile = async (e: React.FormEvent) => {
@@ -182,25 +198,32 @@ export default function EditProfilPage() {
     if (!profile) return;
     setProfileMsg(null);
     setSavingProfile(true);
-    const { error } = await supabase
-      .from('Anggota')
-      .update({
-        nama: nama.trim(),
-        jabatan: jabatan.trim() || null,
-        nama_pt: namaPt.trim() || null,
-        info_kontak: infoKontak.trim() || null,
-        status_bekerja: statusBekerja,
-        lulusan_tahun: lulusanTahun,
-        jenis_kapal: profileJenisKapal.trim() || null,
-      })
-      .eq('id', profile.id);
-    setSavingProfile(false);
-    if (error) {
-      setProfileMsg({ type: 'error', text: error.message });
-      return;
+    try {
+      const { error } = await withTimeout(
+        supabase
+          .from('Anggota')
+          .update({
+            nama: nama.trim(),
+            jabatan: jabatan.trim() || null,
+            nama_pt: namaPt.trim() || null,
+            info_kontak: infoKontak.trim() || null,
+            status_bekerja: statusBekerja,
+            lulusan_tahun: lulusanTahun,
+            jenis_kapal: profileJenisKapal.trim() || null,
+          })
+          .eq('id', profile.id)
+      );
+      if (error) {
+        setProfileMsg({ type: 'error', text: error.message });
+        return;
+      }
+      await refreshProfile();
+      setProfileMsg({ type: 'success', text: 'Profil berhasil disimpan.' });
+    } catch (e: unknown) {
+      setProfileMsg({ type: 'error', text: e instanceof Error ? e.message : 'Gagal menyimpan profil' });
+    } finally {
+      setSavingProfile(false);
     }
-    await refreshProfile();
-    setProfileMsg({ type: 'success', text: 'Profil berhasil disimpan.' });
   };
 
   const buildDurasi = () => {
@@ -220,24 +243,32 @@ export default function EditProfilPage() {
     if (!profile) return;
     setSavingPengalaman(true);
     const durasi = buildDurasi();
-    const { data, error } = await supabase
-      .from('Pengalaman')
-      .insert({
-        id_anggota: profile.id,
-        nama_kapal: namaKapal.trim(),
-        nama_perusahaan: namaPerusahaan.trim() || null,
-        jenis_kapal: jenisKapal || null,
-        rute: rute || null,
-        durasi,
-      })
-      .select('id, id_anggota, nama_kapal, nama_perusahaan, jenis_kapal, rute, durasi, created_at')
-      .single();
-    setSavingPengalaman(false);
-    if (error) {
-      setPengalamanMsg({ type: 'error', text: error.message });
+    try {
+      const { data, error } = await withTimeout(
+        supabase
+          .from('Pengalaman')
+          .insert({
+            id_anggota: profile.id,
+            nama_kapal: namaKapal.trim(),
+            nama_perusahaan: namaPerusahaan.trim() || null,
+            jenis_kapal: jenisKapal || null,
+            rute: rute || null,
+            durasi,
+          })
+          .select('id, id_anggota, nama_kapal, nama_perusahaan, jenis_kapal, rute, durasi, created_at')
+          .single()
+      );
+      if (error) {
+        setPengalamanMsg({ type: 'error', text: error.message });
+        return;
+      }
+      setPengalaman((prev) => [data as Pengalaman, ...prev]);
+    } catch (e: unknown) {
+      setPengalamanMsg({ type: 'error', text: e instanceof Error ? e.message : 'Gagal menambah riwayat' });
       return;
+    } finally {
+      setSavingPengalaman(false);
     }
-    setPengalaman((prev) => [data as Pengalaman, ...prev]);
     setNamaKapal('');
     setNamaPerusahaan('');
     setJenisKapal('');
@@ -248,12 +279,16 @@ export default function EditProfilPage() {
   };
 
   const handleDeletePengalaman = async (id: string) => {
-    const { error } = await supabase.from('Pengalaman').delete().eq('id', id);
-    if (error) {
-      setPengalamanMsg({ type: 'error', text: error.message });
-      return;
+    try {
+      const { error } = await withTimeout(supabase.from('Pengalaman').delete().eq('id', id));
+      if (error) {
+        setPengalamanMsg({ type: 'error', text: error.message });
+        return;
+      }
+      setPengalaman((prev) => prev.filter((p) => p.id !== id));
+    } catch (e: unknown) {
+      setPengalamanMsg({ type: 'error', text: e instanceof Error ? e.message : 'Gagal menghapus riwayat' });
     }
-    setPengalaman((prev) => prev.filter((p) => p.id !== id));
   };
 
   // --- LOGIKA BARU UNTUK FOTO ---
@@ -325,9 +360,11 @@ export default function EditProfilPage() {
       const filePath = `${user.id}/avatar-${Date.now()}.${fileExt}`;
 
       // 3. Upload ke Supabase
-      const { error: uploadErr } = await supabase.storage
-        .from('profile-photos')
-        .upload(filePath, croppedBlob, { cacheControl: '3600', upsert: false });
+      const { error: uploadErr } = await withTimeout(
+        supabase.storage
+          .from('profile-photos')
+          .upload(filePath, croppedBlob, { cacheControl: '3600', upsert: false })
+      );
 
       if (uploadErr) throw uploadErr;
 
@@ -337,10 +374,12 @@ export default function EditProfilPage() {
 
       // 5. Update Database Anggota
       const oldFotoUrl = profile.foto_url;
-      const { error: dbErr } = await supabase
-        .from('Anggota')
-        .update({ foto_url: newFotoUrl })
-        .eq('id', profile.id);
+      const { error: dbErr } = await withTimeout(
+        supabase
+          .from('Anggota')
+          .update({ foto_url: newFotoUrl })
+          .eq('id', profile.id)
+      );
 
       if (dbErr) throw dbErr;
 
@@ -349,7 +388,7 @@ export default function EditProfilPage() {
         try {
           const oldPath = oldFotoUrl.split('/profile-photos/')[1];
           if (oldPath) {
-            await supabase.storage.from('profile-photos').remove([oldPath]);
+            await withTimeout(supabase.storage.from('profile-photos').remove([oldPath]));
           }
         } catch {
           // Abaikan jika gagal menghapus
