@@ -2,9 +2,9 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Anchor, User, Briefcase, Ship, Phone, Mail, Loader2, AlertCircle, CheckCircle2, CalendarClock } from 'lucide-react';
+import { Anchor, User, Briefcase, Ship, Phone, Mail, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { useAuth } from '@/components/auth-provider';
-import { supabase } from '@/lib/supabase';
+import { supabase, LULUSAN_TAHUN_OPTIONS } from '@/lib/supabase';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -35,16 +35,16 @@ export default function LengkapiProfilPage() {
       setError('Nama wajib diisi.');
       return;
     }
-    if (!user?.email) {
+    if (!user?.id || !user?.email) {
       setError('Sesi tidak valid. Silakan login kembali.');
       return;
     }
     setLoading(true);
-    
-    // PERBAIKAN: Menggunakan upsert agar tidak error saat email sudah ada
+
     const { data, error: err } = await supabase
       .from('Anggota')
       .upsert({
+        id: user.id,
         nama: nama.trim(),
         jabatan: jabatan.trim() || null,
         nama_pt: namaPt.trim() || null,
@@ -52,8 +52,8 @@ export default function LengkapiProfilPage() {
         info_kontak: infoKontak.trim() || null,
         email: user.email,
         role: 'member',
-        lulusan_tahun: lulusanTahun.trim() || null,
-      }, { onConflict: 'email' }) // Memastikan tidak ada tabrakan email
+        lulusan_tahun: lulusanTahun || null,
+      }, { onConflict: 'id' })
       .select('id, nama, email, role')
       .single();
       
@@ -137,15 +137,21 @@ export default function LengkapiProfilPage() {
                 />
               </Field>
 
-              <Field label="Tahun Lulus" icon={CalendarClock}>
-                <Input
-                  type="number"
-                  placeholder="Contoh: 2015"
-                  value={lulusanTahun}
-                  onChange={(e) => setLulusanTahun(e.target.value)}
-                  className="h-10 pl-10"
-                />
-              </Field>
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-slate-700">Tahun Lulus</label>
+                <Select value={lulusanTahun} onValueChange={setLulusanTahun}>
+                  <SelectTrigger className="h-10">
+                    <SelectValue placeholder="Pilih tahun lulus" />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-[280px]">
+                    {LULUSAN_TAHUN_OPTIONS.map((opt) => (
+                      <SelectItem key={opt} value={opt}>
+                        {opt}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
 
               {error && (
                 <div className="flex items-start gap-2 rounded-lg bg-red-50 p-3 text-sm text-red-600 dark:bg-red-950/30 dark:text-red-400">
