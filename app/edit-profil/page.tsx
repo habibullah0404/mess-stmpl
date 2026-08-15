@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Anchor, User, Briefcase, Ship as ShipIcon, Phone, Loader as Loader2, CircleAlert as AlertCircle, Plus, Trash2, MapPin, Clock, Save, ArrowLeft, CircleCheck as CheckCircle2, Camera, Upload, X } from 'lucide-react';
 import { useAuth } from '@/components/auth-provider';
-import { supabase, type Pengalaman, JENIS_KAPAL_OPTIONS, RUTE_OPTIONS, LULUSAN_TAHUN_OPTIONS } from '@/lib/supabase';
+import { supabase, type Pengalaman, RUTE_OPTIONS, LULUSAN_TAHUN_OPTIONS } from '@/lib/supabase';
 import { withTimeout } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -104,7 +104,7 @@ async function getCroppedImg(
 // ----------------------------------------
 
 export default function EditProfilPage() {
-  const { user, profile, loading: authLoading, refreshProfile } = useAuth();
+  const { user, profile, loading: authLoading, profileChecked, refreshProfile } = useAuth();
   const router = useRouter();
   const [nama, setNama] = useState('');
   const [jabatan, setJabatan] = useState('');
@@ -140,7 +140,7 @@ export default function EditProfilPage() {
   // --------------------------------------
 
   useEffect(() => {
-    if (authLoading) return;
+    if (authLoading || !profileChecked) return;
     if (!user) {
       router.push('/login');
       return;
@@ -156,7 +156,7 @@ export default function EditProfilPage() {
     setStatusBekerja(profile.status_bekerja ?? 'Standby');
     setLulusanTahun(profile.lulusan_tahun ?? 'Umum');
     setProfileJenisKapal(profile.jenis_kapal ?? '');
-  }, [user, profile, authLoading, router]);
+  }, [user, profile, authLoading, profileChecked, router]);
 
   const loadPengalaman = useCallback(async () => {
     if (!profile) return;
@@ -656,18 +656,12 @@ export default function EditProfilPage() {
                 </Field>
                 <div>
                   <label className="mb-1.5 block text-sm font-medium text-slate-700">Jenis Kapal</label>
-                  <Select value={jenisKapal} onValueChange={setJenisKapal}>
-                    <SelectTrigger className="h-10">
-                      <SelectValue placeholder="Pilih jenis kapal" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {JENIS_KAPAL_OPTIONS.map((opt) => (
-                        <SelectItem key={opt} value={opt}>
-                          {opt}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Input
+                    placeholder="Contoh: Tanker / Cargo / Tug Boat"
+                    value={jenisKapal}
+                    onChange={(e) => setJenisKapal(e.target.value)}
+                    className="h-10"
+                  />
                 </div>
                 <div>
                   <label className="mb-1.5 block text-sm font-medium text-slate-700">Rute</label>

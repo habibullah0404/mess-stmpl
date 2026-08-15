@@ -28,6 +28,7 @@ export type Anggota = {
   jenis_kapal: string | null;
   is_verified: boolean | null;
   foto_url: string | null;
+  saldo_titipan: number | null;
   created_at?: string | null;
 };
 

@@ -2,29 +2,7 @@
 
 import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import {
-  Shield,
-  Users,
-  Wallet,
-  Receipt,
-  HandHeart,
-  Megaphone,
-  Landmark,
-  Download,
-  Loader2,
-  AlertCircle,
-  CheckCircle2,
-  XCircle,
-  Upload,
-  Trash2,
-  Plus,
-  ExternalLink,
-  RotateCw,
-  Check,
-  X,
-  Search,
-  Filter as FilterIcon,
-} from 'lucide-react';
+import { Shield, Users, Wallet, Receipt, HandHeart, Megaphone, Landmark, Download, Loader as Loader2, CircleAlert as AlertCircle, CircleCheck as CheckCircle2, Circle as XCircle, Upload, Trash2, Plus, ExternalLink, RotateCw, Check, X, Search, Filter as FilterIcon, TriangleAlert as AlertTriangle } from 'lucide-react';
 import {
   supabase,
   type Anggota,
@@ -51,14 +29,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { cn } from '@/lib/utils';
+import { cn, withTimeout } from '@/lib/utils';
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogDescription,
+  DialogFooter,
 } from '@/components/ui/dialog';
+
+type ConfirmAction =
+  | { type: 'verify'; id: string; nama: string; current: boolean }
+  | { type: 'role'; id: string; nama: string; currentRole: string }
+  | { type: 'reject'; id: string; nama: string };
 
 const CURRENT_YEAR = new Date().getFullYear();
 
@@ -94,6 +78,8 @@ export default function AdminPage() {
   const [anggota, setAnggota] = useState<Anggota[]>([]);
   const [loadingAnggota, setLoadingAnggota] = useState(true);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
+  const [confirmLoading, setConfirmLoading] = useState(false);
 
   // Iuran state
   const [iuran, setIuran] = useState<IuranRow[]>([]);
@@ -107,6 +93,7 @@ export default function AdminPage() {
   const [addIuranAnggota, setAddIuranAnggota] = useState('');
   const [addIuranTahunDasar, setAddIuranTahunDasar] = useState(String(CURRENT_YEAR));
   const [savingNewIuran, setSavingNewIuran] = useState(false);
+  const [addIuranNominal, setAddIuranNominal] = useState('');
 
   // Pengeluaran state
   const [pengeluaran, setPengeluaran] = useState<Pengeluaran[]>([]);
@@ -156,7 +143,7 @@ export default function AdminPage() {
     setLoadingAnggota(true);
     const { data, error: err } = await supabase
       .from('Anggota')
-      .select('id, nama, jabatan, nama_pt, status_bekerja, info_kontak, pengalaman_kerja, email, role, lulusan_tahun, jenis_kapal, is_verified, created_at')
+      .select('id, nama, jabatan, nama_pt, status_bekerja, info_kontak, pengalaman_kerja, email, role, lulusan_tahun, jenis_kapal, is_verified, saldo_titipan, created_at')
       .order('nama', { ascending: true });
     if (err) {
       setError(err.message);
@@ -248,35 +235,65 @@ export default function AdminPage() {
   // --- Anggota actions ---
   const handleToggleVerified = async (id: string, current: boolean) => {
     setUpdatingId(id);
-    const { error: err } = await supabase
-      .from('Anggota')
-      .update({ is_verified: !current })
-      .eq('id', id);
-    setUpdatingId(null);
-    if (err) {
-      setError(err.message);
-      return;
-    }
-    setAnggota((prev) => prev.map((a) => (a.id === id ? { ...a, is_verified: !current } : a)));
-    setSuccessMsg(current ? 'Anggota dibatalkan verifikasinya' : 'Anggota diverifikasi');
-    setTimeout(() => setSuccessMsg(null), 3000);
+    try {
+      const { error: err } = await withTimeout(
+        supabase.from('Anggota').update({ is_verified: !current }).eq('id', id)
+      );
+      if (err) { setError(err.message); return; }
+      setAnggota((prev) => prev.map((a) => (a.id === id ? { ...a, is_verified: !current } : a)));
+      setSuccessMsg(current ? 'Verifikasi anggota dibatalkan' : 'Anggota diverifikasi');
+      setTimeout(() => setSuccessMsg(null), 3000);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Gagal memperbarui verifikasi');
+    } finally { setUpdatingId(null); }
   };
 
   const handleToggleRole = async (id: string, currentRole: string) => {
     const newRole = currentRole === 'admin' ? 'member' : 'admin';
     setUpdatingId(id);
-    const { error: err } = await supabase
-      .from('Anggota')
-      .update({ role: newRole })
-      .eq('id', id);
-    setUpdatingId(null);
-    if (err) {
-      setError(err.message);
-      return;
+    try {
+      const { error: err } = await withTimeout(
+        supabase.from('Anggota').update({ role: newRole }).eq('id', id)
+      );
+      if (err) { setError(err.message); return; }
+      setAnggota((prev) => prev.map((a) => (a.id === id ? { ...a, role: newRole } : a)));
+      setSuccessMsg(`Role diubah menjadi ${newRole}`);
+      setTimeout(() => setSuccessMsg(null), 3000);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Gagal mengubah role');
+    } finally { setUpdatingId(null); }
+  };
+
+  const handleRejectAnggota = async (id: string) => {
+    setUpdatingId(id);
+    try {
+      const { error: err } = await withTimeout(
+        supabase.from('Anggota').delete().eq('id', id)
+      );
+      if (err) { setError(err.message); return; }
+      setAnggota((prev) => prev.filter((a) => a.id !== id));
+      setSuccessMsg('Anggota dihapus permanen');
+      setTimeout(() => setSuccessMsg(null), 3000);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Gagal menghapus anggota');
+    } finally { setUpdatingId(null); }
+  };
+
+  const handleConfirm = async () => {
+    if (!confirmAction) return;
+    setConfirmLoading(true);
+    try {
+      if (confirmAction.type === 'verify') {
+        await handleToggleVerified(confirmAction.id, confirmAction.current);
+      } else if (confirmAction.type === 'role') {
+        await handleToggleRole(confirmAction.id, confirmAction.currentRole);
+      } else if (confirmAction.type === 'reject') {
+        await handleRejectAnggota(confirmAction.id);
+      }
+    } finally {
+      setConfirmLoading(false);
+      setConfirmAction(null);
     }
-    setAnggota((prev) => prev.map((a) => (a.id === id ? { ...a, role: newRole } : a)));
-    setSuccessMsg(`Role diubah menjadi ${newRole}`);
-    setTimeout(() => setSuccessMsg(null), 3000);
   };
 
   // --- Iuran actions ---
@@ -336,24 +353,41 @@ export default function AdminPage() {
       return;
     }
     setSavingNewIuran(true);
+    const pembayaranNominal = parseInt(addIuranNominal || nominalIuran || '0', 10);
     const { error: err } = await supabase.from('Iuran').insert({
       id_anggota: addIuranAnggota,
       tahun: addIuranTahunDasar,
       tahun_dasar: addIuranTahunDasar,
-      nominal: nominalIuran || '0',
+      nominal: String(pembayaranNominal),
       status_pembayaran: 'Lunas',
     });
-    setSavingNewIuran(false);
     if (err) {
+      setSavingNewIuran(false);
       setError(err.message);
       return;
     }
+    if (pembayaranNominal > 300000) {
+      const selisih = pembayaranNominal - 300000;
+      const { data: anggotaData } = await supabase
+        .from('Anggota')
+        .select('saldo_titipan')
+        .eq('id', addIuranAnggota)
+        .single();
+      const saldoSekarang = (anggotaData as { saldo_titipan: number | null } | null)?.saldo_titipan ?? 0;
+      await supabase
+        .from('Anggota')
+        .update({ saldo_titipan: saldoSekarang + selisih })
+        .eq('id', addIuranAnggota);
+    }
+    setSavingNewIuran(false);
     setSuccessMsg('Iuran baru berhasil ditambahkan.');
     setTimeout(() => setSuccessMsg(null), 3000);
     setShowAddIuran(false);
     setAddIuranAnggota('');
     setAddIuranTahunDasar(String(CURRENT_YEAR));
+    setAddIuranNominal('');
     loadIuran();
+    loadAnggota();
   };
 
   // --- Pengeluaran actions ---
@@ -515,7 +549,7 @@ export default function AdminPage() {
     exportAnggotaToCSV(anggota);
   };
 
-  if (authLoading) {
+  if (authLoading || !profileChecked) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-50">
         <Loader2 className="h-8 w-8 animate-spin text-blue-700" />
@@ -612,6 +646,7 @@ export default function AdminPage() {
                         <Th>Email</Th>
                         <Th>Role</Th>
                         <Th>Verified</Th>
+                        <Th>Saldo Titipan</Th>
                         <Th>Aksi</Th>
                       </tr>
                     </thead>
@@ -641,6 +676,9 @@ export default function AdminPage() {
                               </span>
                             )}
                           </td>
+                          <td className="px-4 py-3 text-slate-600 dark:text-slate-300">
+                            {a.saldo_titipan ? formatRupiah(a.saldo_titipan) : '-'}
+                          </td>
                           <td className="px-4 py-3">
                             <div className="flex items-center gap-2">
                               {updatingId === a.id ? (
@@ -648,7 +686,7 @@ export default function AdminPage() {
                               ) : (
                                 <>
                                   <button
-                                    onClick={() => handleToggleVerified(a.id, a.is_verified ?? false)}
+                                    onClick={() => setConfirmAction({ type: 'verify', id: a.id, nama: a.nama, current: a.is_verified ?? false })}
                                     className={cn(
                                       'flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors',
                                       a.is_verified
@@ -656,13 +694,19 @@ export default function AdminPage() {
                                         : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/30 dark:text-emerald-400'
                                     )}
                                   >
-                                    {a.is_verified ? <><X className="h-3.5 w-3.5" /> Tolak</> : <><Check className="h-3.5 w-3.5" /> Setujui</>}
+                                    {a.is_verified ? <><X className="h-3.5 w-3.5" /> Tolak Verifikasi</> : <><Check className="h-3.5 w-3.5" /> Verifikasi</>}
                                   </button>
                                   <button
-                                    onClick={() => handleToggleRole(a.id, a.role ?? 'member')}
+                                    onClick={() => setConfirmAction({ type: 'role', id: a.id, nama: a.nama, currentRole: a.role ?? 'member' })}
                                     className="flex items-center gap-1 rounded-lg bg-amber-50 px-2.5 py-1.5 text-xs font-medium text-amber-700 transition-colors hover:bg-amber-100 dark:bg-amber-950/30 dark:text-amber-400"
                                   >
                                     {a.role === 'admin' ? 'Jadikan Member' : 'Jadikan Admin'}
+                                  </button>
+                                  <button
+                                    onClick={() => setConfirmAction({ type: 'reject', id: a.id, nama: a.nama })}
+                                    className="flex items-center gap-1 rounded-lg bg-red-50 px-2.5 py-1.5 text-xs font-medium text-red-600 transition-colors hover:bg-red-100 dark:bg-red-950/30 dark:text-red-400"
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" /> Tolak
                                   </button>
                                 </>
                               )}
@@ -1098,6 +1142,21 @@ export default function AdminPage() {
                   Tahun dasar adalah titik awal perhitungan iuran. Default: tahun ini.
                 </p>
               </div>
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300">
+                  Nominal Pembayaran
+                </label>
+                <Input
+                  type="number"
+                  value={addIuranNominal}
+                  onChange={(e) => setAddIuranNominal(e.target.value)}
+                  className="h-10"
+                  placeholder={nominalIuran ? `Default: ${nominalIuran}` : 'Contoh: 100000'}
+                />
+                <p className="mt-1 text-xs text-slate-400">
+                  Jika pembayaran melebihi Rp 300.000, selisihnya otomatis masuk ke saldo titipan anggota.
+                </p>
+              </div>
               {error && (
                 <div className="flex items-start gap-2 rounded-lg bg-red-50 p-3 text-sm text-red-600 dark:bg-red-950/30 dark:text-red-400">
                   <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
@@ -1128,6 +1187,56 @@ export default function AdminPage() {
                 </Button>
               </div>
             </form>
+          </DialogContent>
+        </Dialog>
+        {/* Confirmation Modal */}
+        <Dialog open={!!confirmAction} onOpenChange={(open) => !open && !confirmLoading && setConfirmAction(null)}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <AlertTriangle className="h-5 w-5 text-amber-500" />
+                Konfirmasi Aksi
+              </DialogTitle>
+              <DialogDescription>
+                {confirmAction?.type === 'reject'
+                  ? `Anda akan menghapus permanen data anggota "${confirmAction?.nama}" dari database. Aksi ini tidak dapat dibatalkan.`
+                  : confirmAction?.type === 'verify'
+                  ? `Anda akan ${confirmAction?.current ? 'membatalkan verifikasi' : 'memverifikasi'} anggota "${confirmAction?.nama}".`
+                  : `Anda akan mengubah role anggota "${confirmAction?.nama}" menjadi ${confirmAction?.currentRole === 'admin' ? 'Member' : 'Admin'}.`}
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => !confirmLoading && setConfirmAction(null)}
+                disabled={confirmLoading}
+                className="h-10"
+              >
+                Batal
+              </Button>
+              <Button
+                type="button"
+                onClick={handleConfirm}
+                disabled={confirmLoading}
+                className={cn(
+                  'h-10',
+                  confirmAction?.type === 'reject'
+                    ? 'bg-red-600 hover:bg-red-700'
+                    : confirmAction?.type === 'verify' && confirmAction?.current
+                    ? 'bg-red-600 hover:bg-red-700'
+                    : 'bg-blue-900 hover:bg-blue-800'
+                )}
+              >
+                {confirmLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : confirmAction?.type === 'reject' ? (
+                  <><Trash2 className="h-4 w-4" /> Ya, Hapus Permanen</>
+                ) : (
+                  <><Check className="h-4 w-4" /> Ya, Lanjutkan</>
+                )}
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       </main>

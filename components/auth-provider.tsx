@@ -59,7 +59,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { data, error } = await supabase
         .from('Anggota')
         .select(
-          'id, nama, jabatan, nama_pt, status_bekerja, info_kontak, pengalaman_kerja, email, role, lulusan_tahun, jenis_kapal, is_verified, foto_url, created_at'
+          'id, nama, jabatan, nama_pt, status_bekerja, info_kontak, pengalaman_kerja, email, role, lulusan_tahun, jenis_kapal, is_verified, foto_url, saldo_titipan, created_at'
         )
         .eq('email', email)
         .maybeSingle();
