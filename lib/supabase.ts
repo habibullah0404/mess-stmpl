@@ -212,6 +212,8 @@ export type SaldoBreakdown = {
   totalDonasi: number;
   totalIuranLunas: number;
   totalPengeluaran: number;
+  totalSaldoTitipan: number;
+  totalKasMasuk: number;
   jumlahLunas: number;
   nominalIuran: number;
   saldoKas: number;
@@ -223,7 +225,8 @@ export function computeSaldoKas(
   pengeluaranRows: { nominal: string | number }[],
   saldoAwalStr: string | null,
   nominalIuranStr: string | null,
-  currentYear: number
+  currentYear: number,
+  anggotaRows?: { saldo_titipan: number | null }[]
 ): SaldoBreakdown {
   const saldoAwal = parseInt(saldoAwalStr ?? '', 10) || 0;
   const nominalIuran = parseInt(nominalIuranStr ?? '', 10) || 0;
@@ -249,13 +252,20 @@ export function computeSaldoKas(
     (sum, p) => sum + (parseInt(String(p.nominal), 10) || 0),
     0
   );
-  const saldoKas = saldoAwal + totalDonasi - totalPengeluaran + totalIuranLunas;
+  const totalSaldoTitipan = (anggotaRows ?? []).reduce(
+    (sum, a) => sum + (a.saldo_titipan ?? 0),
+    0
+  );
+  const totalKasMasuk = totalIuranLunas + totalDonasi + totalSaldoTitipan;
+  const saldoKas = totalKasMasuk - totalPengeluaran;
 
   return {
     saldoAwal,
     totalDonasi,
     totalIuranLunas,
     totalPengeluaran,
+    totalSaldoTitipan,
+    totalKasMasuk,
     jumlahLunas,
     nominalIuran,
     saldoKas,

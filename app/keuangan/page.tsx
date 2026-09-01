@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Wallet, Loader as Loader2, CircleAlert as AlertCircle, Calendar, CircleCheck as CheckCircle2, Circle as XCircle, CircleArrowUp as ArrowUpCircle, HandHeart, RotateCw, TrendingUp, TrendingDown, Scale, Receipt, ExternalLink, Landmark, Search, Filter as FilterIcon, Plus, Pencil, Check, Banknote, Coins, Trash2, X } from 'lucide-react';
+import { Wallet, Loader as Loader2, CircleAlert as AlertCircle, Calendar, CircleCheck as CheckCircle2, Circle as XCircle, CircleArrowUp as ArrowUpCircle, HandHeart, RotateCw, Scale, Receipt, ExternalLink, Landmark, Search, Filter as FilterIcon, Plus, Pencil, Check, Banknote, Coins, Trash2, X } from 'lucide-react';
 import {
   supabase,
   type Anggota,
@@ -99,7 +99,7 @@ export default function KeuanganPage() {
     setError(null);
     try {
       const [anggotaRes, iuranRes, donasiRes, pengeluaranRes, pinjamanRes] = await Promise.all([
-        supabase.from('Anggota').select('id, nama').order('nama'),
+        supabase.from('Anggota').select('id, nama, saldo_titipan').order('nama'),
         supabase.from('Iuran').select('id, id_anggota, tahun, tahun_dasar, nominal, status_pembayaran, created_at'),
         supabase.from('Donasi').select('id, id_anggota, nama_acara, nominal, tanggal, created_at').order('tanggal', { ascending: false }),
         supabase.from('Pengeluaran').select('id, nama_pengeluaran, nominal, tanggal, bulan, file_url, created_at').order('tanggal', { ascending: false }),
@@ -185,7 +185,8 @@ export default function KeuanganPage() {
       pengeluaran,
       saldoAwal,
       nominalIuran,
-      CURRENT_YEAR
+      CURRENT_YEAR,
+      anggotaList
     );
     return {
       totalLunas,
@@ -194,12 +195,14 @@ export default function KeuanganPage() {
       totalDonasi: saldo.totalDonasi,
       totalPengeluaran: saldo.totalPengeluaran,
       totalIuranLunas: saldo.totalIuranLunas,
+      totalSaldoTitipan: saldo.totalSaldoTitipan,
+      totalKasMasuk: saldo.totalKasMasuk,
       saldoKas: saldo.saldoKas,
       saldoAwal: saldo.saldoAwal,
       jumlahLunas: saldo.jumlahLunas,
       nominalIuran: saldo.nominalIuran,
     };
-  }, [iuran, donasi, pengeluaran, saldoAwal, nominalIuran]);
+  }, [iuran, donasi, pengeluaran, saldoAwal, nominalIuran, anggotaList]);
 
   const filteredIuran = useMemo(() => {
     const q = iuranSearch.trim().toLowerCase();
@@ -223,12 +226,10 @@ export default function KeuanganPage() {
     [pinjaman]
   );
 
-  const totalKasMasuk = useMemo(
-    () => stats.saldoAwal + stats.totalDonasi + stats.totalIuranLunas,
-    [stats]
+  const sisaKasBersih = useMemo(
+    () => stats.totalKasMasuk - stats.totalPengeluaran,
+    [stats.totalKasMasuk, stats.totalPengeluaran]
   );
-
-  const sisaKasBersih = totalKasMasuk - totalPinjamanAktif;
 
   const hideNominal = !isMember;
 
@@ -353,7 +354,7 @@ export default function KeuanganPage() {
               </div>
               <div className="min-w-0">
                 <p className="truncate text-xs font-medium text-slate-500 dark:text-slate-400">Total Kas Masuk</p>
-                <p className="text-xl font-bold leading-tight text-slate-800 dark:text-slate-100">{hideNominal ? 'Rp •••' : formatRupiah(totalKasMasuk)}</p>
+                <p className="text-xl font-bold leading-tight text-slate-800 dark:text-slate-100">{hideNominal ? 'Rp •••' : formatRupiah(stats.totalKasMasuk)}</p>
               </div>
             </CardContent>
           </Card>

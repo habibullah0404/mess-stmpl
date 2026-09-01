@@ -353,12 +353,39 @@ export default function AdminPage() {
       return;
     }
     setSavingNewIuran(true);
+    const IURAN_TETAP = 300000;
     const pembayaranNominal = parseInt(addIuranNominal || nominalIuran || '0', 10);
+    if (isNaN(pembayaranNominal) || pembayaranNominal < 0) {
+      setSavingNewIuran(false);
+      setError('Nominal pembayaran tidak valid.');
+      return;
+    }
+
+    // Fetch current saldo_titipan for this member
+    const { data: anggotaData } = await supabase
+      .from('Anggota')
+      .select('saldo_titipan')
+      .eq('id', addIuranAnggota)
+      .single();
+    const saldoTitipanSekarang = (anggotaData as { saldo_titipan: number | null } | null)?.saldo_titipan ?? 0;
+
+    // The total recorded iuran is always the fixed amount
+    const nominalDicatat = IURAN_TETAP;
+
+    // If the member has saldo_titipan, it acts as a deduction.
+    // The admin pays (pembayaranNominal) in cash; the rest is covered by saldo_titipan.
+    // Example: tagihan 300k, saldo 100k, bayar 200k → iuran recorded as 300k, saldo → 0
+    // If bayar < 200k (i.e. pembayaranNominal + saldoTitipanSekarang < IURAN_TETAP), that's underpayment — still record but warn.
+    const totalTercakup = pembayaranNominal + saldoTitipanSekarang;
+    const saldoTerpakai = Math.min(saldoTitipanSekarang, IURAN_TETAP - pembayaranNominal);
+    const sisaSaldoTitipan = Math.max(0, saldoTitipanSekarang - Math.max(0, saldoTerpakai));
+
+    // Insert iuran record with the fixed amount
     const { error: err } = await supabase.from('Iuran').insert({
       id_anggota: addIuranAnggota,
       tahun: addIuranTahunDasar,
       tahun_dasar: addIuranTahunDasar,
-      nominal: String(pembayaranNominal),
+      nominal: String(nominalDicatat),
       status_pembayaran: 'Lunas',
     });
     if (err) {
@@ -366,22 +393,41 @@ export default function AdminPage() {
       setError(err.message);
       return;
     }
-    if (pembayaranNominal > 300000) {
-      const selisih = pembayaranNominal - 300000;
-      const { data: anggotaData } = await supabase
+
+    // Update saldo_titipan: zero out the portion used as deduction
+    if (saldoTerpakai > 0) {
+      const { error: updErr } = await supabase
         .from('Anggota')
-        .select('saldo_titipan')
-        .eq('id', addIuranAnggota)
-        .single();
-      const saldoSekarang = (anggotaData as { saldo_titipan: number | null } | null)?.saldo_titipan ?? 0;
-      await supabase
-        .from('Anggota')
-        .update({ saldo_titipan: saldoSekarang + selisih })
+        .update({ saldo_titipan: sisaSaldoTitipan })
         .eq('id', addIuranAnggota);
+      if (updErr) {
+        setError('Iuran tersimpan, tapi gagal memperbarui saldo titipan: ' + updErr.message);
+      }
     }
+
+    // If there's excess payment beyond the fixed amount, add to saldo_titipan
+    if (pembayaranNominal > IURAN_TETAP) {
+      const selisih = pembayaranNominal - IURAN_TETAP;
+      const { error: updErr } = await supabase
+        .from('Anggota')
+        .update({ saldo_titipan: sisaSaldoTitipan + selisih })
+        .eq('id', addIuranAnggota);
+      if (updErr) {
+        setError('Iuran tersimpan, tapi gagal menambahkan saldo titipan: ' + updErr.message);
+      }
+    }
+
+    let msg = 'Iuran baru berhasil ditambahkan.';
+    if (saldoTerpakai > 0) {
+      msg += ` Saldo titipan ${formatRupiah(saldoTerpakai)} dipakai sebagai potongan.`;
+    }
+    if (totalTercakup < IURAN_TETAP) {
+      msg += ` Perhatian: total pembayaran (${formatRupiah(totalTercakup)}) kurang dari iuran tetap (${formatRupiah(IURAN_TETAP)}).`;
+    }
+
     setSavingNewIuran(false);
-    setSuccessMsg('Iuran baru berhasil ditambahkan.');
-    setTimeout(() => setSuccessMsg(null), 3000);
+    setSuccessMsg(msg);
+    setTimeout(() => setSuccessMsg(null), 5000);
     setShowAddIuran(false);
     setAddIuranAnggota('');
     setAddIuranTahunDasar(String(CURRENT_YEAR));
@@ -1144,18 +1190,33 @@ export default function AdminPage() {
               </div>
               <div>
                 <label className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300">
-                  Nominal Pembayaran
+                  Nominal Pembayaran (Tunai)
                 </label>
                 <Input
                   type="number"
                   value={addIuranNominal}
                   onChange={(e) => setAddIuranNominal(e.target.value)}
                   className="h-10"
-                  placeholder={nominalIuran ? `Default: ${nominalIuran}` : 'Contoh: 100000'}
+                  placeholder="Contoh: 300000"
                 />
                 <p className="mt-1 text-xs text-slate-400">
-                  Jika pembayaran melebihi Rp 300.000, selisihnya otomatis masuk ke saldo titipan anggota.
+                  Iuran tetap Rp 300.000. Jika anggota punya saldo titipan, itu otomatis dipakai sebagai potongan. Sisa pembayaran tunai diisi di sini.
                 </p>
+                {addIuranAnggota && (() => {
+                  const a = anggota.find((x) => x.id === addIuranAnggota);
+                  const saldo = a?.saldo_titipan ?? 0;
+                  if (saldo > 0) {
+                    const tunai = parseInt(addIuranNominal || '0', 10) || 0;
+                    const terpakai = Math.min(saldo, 300000 - tunai);
+                    return (
+                      <div className="mt-2 rounded-lg bg-amber-50 p-2.5 text-xs text-amber-700 dark:bg-amber-950/30 dark:text-amber-400">
+                        Saldo titipan anggota: <strong>{formatRupiah(saldo)}</strong>
+                        {terpakai > 0 && <> &middot; Dipotong: <strong>{formatRupiah(terpakai)}</strong></>}
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
               </div>
               {error && (
                 <div className="flex items-start gap-2 rounded-lg bg-red-50 p-3 text-sm text-red-600 dark:bg-red-950/30 dark:text-red-400">

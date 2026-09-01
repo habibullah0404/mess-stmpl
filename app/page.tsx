@@ -140,18 +140,20 @@ export default function DashboardPage() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const [saldoAwalRes, nominalIuranRes, iuranRes, donasiRes, pengeluaranRes] = await Promise.all([
+      const [saldoAwalRes, nominalIuranRes, iuranRes, donasiRes, pengeluaranRes, anggotaRes] = await Promise.all([
         fetchPengaturan('saldo_awal'),
         fetchPengaturan('nominal_iuran'),
         supabase.from('Iuran').select('id, id_anggota, tahun, tahun_dasar, nominal, status_pembayaran, created_at'),
         supabase.from('Donasi').select('id, id_anggota, nama_acara, nominal, tanggal, created_at'),
         supabase.from('Pengeluaran').select('id, nama_pengeluaran, nominal, tanggal, bulan, file_url, created_at'),
+        supabase.from('Anggota').select('id, saldo_titipan'),
       ]);
       if (cancelled) return;
       const iuranRows = (iuranRes.data as Iuran[]) ?? [];
       const donasiRows = (donasiRes.data as Donasi[]) ?? [];
       const pengeluaranRows = (pengeluaranRes.data as Pengeluaran[]) ?? [];
-      const saldo = computeSaldoKas(iuranRows, donasiRows, pengeluaranRows, saldoAwalRes, nominalIuranRes, CURRENT_YEAR_NUM);
+      const anggotaRows = (anggotaRes.data as { id: string; saldo_titipan: number | null }[]) ?? [];
+      const saldo = computeSaldoKas(iuranRows, donasiRows, pengeluaranRows, saldoAwalRes, nominalIuranRes, CURRENT_YEAR_NUM, anggotaRows);
       setSaldoKas(saldo.saldoKas);
     })();
     return () => { cancelled = true; };
