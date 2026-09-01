@@ -123,7 +123,8 @@ export default function EditProfilPage() {
   const [namaPerusahaan, setNamaPerusahaan] = useState('');
   const [jenisKapal, setJenisKapal] = useState('');
   const [rute, setRute] = useState('');
-  const [durasi, setDurasi] = useState('');
+  const [durasiTahun, setDurasiTahun] = useState('');
+  const [durasiBulan, setDurasiBulan] = useState('');
   const [savingPengalaman, setSavingPengalaman] = useState(false);
   const [pengalamanMsg, setPengalamanMsg] = useState<{ type: 'error' | 'success'; text: string } | null>(null);
 
@@ -226,12 +227,11 @@ export default function EditProfilPage() {
   };
 
   const buildDurasi = () => {
-    if (!durasi) return null;
-    const [y, m] = durasi.split('-').map((v) => parseInt(v, 10));
-    if (isNaN(y) || isNaN(m)) return null;
+    const y = parseInt(durasiTahun, 10);
+    const m = parseInt(durasiBulan, 10);
     const parts: string[] = [];
-    if (y > 0) parts.push(`${y} Tahun`);
-    if (m > 0) parts.push(`${m} Bulan`);
+    if (!isNaN(y) && y > 0) parts.push(`${y} tahun`);
+    if (!isNaN(m) && m > 0) parts.push(`${m} bulan`);
     return parts.length > 0 ? parts.join(' ') : null;
   };
 
@@ -275,7 +275,8 @@ export default function EditProfilPage() {
     setNamaPerusahaan('');
     setJenisKapal('');
     setRute('');
-    setDurasi('');
+    setDurasiTahun('');
+    setDurasiBulan('');
     setPengalamanMsg({ type: 'success', text: 'Riwayat kapal berhasil ditambahkan.' });
   };
 
@@ -679,14 +680,32 @@ export default function EditProfilPage() {
                 <label className="mb-1.5 block text-sm font-medium text-slate-700">
                   Durasi <span className="text-xs font-normal text-slate-400">(opsional)</span>
                 </label>
-                <Input
-                  type="month"
-                  value={durasi}
-                  onChange={(e) => setDurasi(e.target.value)}
-                  className="h-10"
-                />
+                <div className="flex items-center gap-3">
+                  <div className="flex-1">
+                    <Input
+                      type="number"
+                      min={0}
+                      max={50}
+                      placeholder="Tahun"
+                      value={durasiTahun}
+                      onChange={(e) => setDurasiTahun(e.target.value)}
+                      className="h-10"
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <Input
+                      type="number"
+                      min={0}
+                      max={11}
+                      placeholder="Bulan"
+                      value={durasiBulan}
+                      onChange={(e) => setDurasiBulan(e.target.value)}
+                      className="h-10"
+                    />
+                  </div>
+                </div>
                 <p className="mt-1.5 text-xs text-slate-400">
-                  Format Tahun-Bulan (YYYY-MM). Contoh: 2 tahun 6 bulan = isi 0002-06. Dibiarkan kosong jika tidak ingin mengisi.
+                  Isi lama bekerja di kapal tersebut. Contoh: 2 tahun 5 bulan. Dibiarkan kosong jika tidak ingin mengisi.
                 </p>
               </div>
 
