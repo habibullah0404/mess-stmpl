@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Anchor, User, Briefcase, Ship as ShipIcon, Phone, Loader as Loader2, CircleAlert as AlertCircle, Plus, Trash2, MapPin, Clock, Save, ArrowLeft, CircleCheck as CheckCircle2, Camera, Upload, X } from 'lucide-react';
 import { useAuth } from '@/components/auth-provider';
-import { supabase, type Pengalaman, RUTE_OPTIONS, LULUSAN_TAHUN_OPTIONS } from '@/lib/supabase';
+import { supabase, type Pengalaman, LULUSAN_TAHUN_OPTIONS } from '@/lib/supabase';
 import { withTimeout } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -123,8 +123,7 @@ export default function EditProfilPage() {
   const [namaPerusahaan, setNamaPerusahaan] = useState('');
   const [jenisKapal, setJenisKapal] = useState('');
   const [rute, setRute] = useState('');
-  const [durasiBulan, setDurasiBulan] = useState('');
-  const [durasiTahun, setDurasiTahun] = useState('');
+  const [durasi, setDurasi] = useState('');
   const [savingPengalaman, setSavingPengalaman] = useState(false);
   const [pengalamanMsg, setPengalamanMsg] = useState<{ type: 'error' | 'success'; text: string } | null>(null);
 
@@ -227,9 +226,12 @@ export default function EditProfilPage() {
   };
 
   const buildDurasi = () => {
+    if (!durasi) return null;
+    const [y, m] = durasi.split('-').map((v) => parseInt(v, 10));
+    if (isNaN(y) || isNaN(m)) return null;
     const parts: string[] = [];
-    if (durasiBulan && durasiBulan !== '0') parts.push(`${durasiBulan} Bulan`);
-    if (durasiTahun && durasiTahun !== '0') parts.push(`${durasiTahun} Tahun`);
+    if (y > 0) parts.push(`${y} Tahun`);
+    if (m > 0) parts.push(`${m} Bulan`);
     return parts.length > 0 ? parts.join(' ') : null;
   };
 
@@ -273,8 +275,7 @@ export default function EditProfilPage() {
     setNamaPerusahaan('');
     setJenisKapal('');
     setRute('');
-    setDurasiBulan('');
-    setDurasiTahun('');
+    setDurasi('');
     setPengalamanMsg({ type: 'success', text: 'Riwayat kapal berhasil ditambahkan.' });
   };
 
@@ -663,21 +664,14 @@ export default function EditProfilPage() {
                     className="h-10"
                   />
                 </div>
-                <div>
-                  <label className="mb-1.5 block text-sm font-medium text-slate-700">Rute</label>
-                  <Select value={rute} onValueChange={setRute}>
-                    <SelectTrigger className="h-10">
-                      <SelectValue placeholder="Pilih rute" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {RUTE_OPTIONS.map((opt) => (
-                        <SelectItem key={opt} value={opt}>
-                          {opt}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+                <Field label="Rute" icon={MapPin}>
+                  <Input
+                    placeholder="Contoh: NCV / Foreign Going"
+                    value={rute}
+                    onChange={(e) => setRute(e.target.value)}
+                    className="h-10 pl-10"
+                  />
+                </Field>
               </div>
 
               {/* Durasi (optional) */}
@@ -685,40 +679,14 @@ export default function EditProfilPage() {
                 <label className="mb-1.5 block text-sm font-medium text-slate-700">
                   Durasi <span className="text-xs font-normal text-slate-400">(opsional)</span>
                 </label>
-                <div className="flex items-center gap-3">
-                  <div className="flex-1">
-                    <Select value={durasiBulan} onValueChange={setDurasiBulan}>
-                      <SelectTrigger className="h-10">
-                        <SelectValue placeholder="Bulan" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="0">0 Bulan</SelectItem>
-                        {Array.from({ length: 11 }, (_, i) => i + 1).map((n) => (
-                          <SelectItem key={n} value={String(n)}>
-                            {n} Bulan
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="flex-1">
-                    <Select value={durasiTahun} onValueChange={setDurasiTahun}>
-                      <SelectTrigger className="h-10">
-                        <SelectValue placeholder="Tahun" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="0">0 Tahun</SelectItem>
-                        {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
-                          <SelectItem key={n} value={String(n)}>
-                            {n} Tahun
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
+                <Input
+                  type="month"
+                  value={durasi}
+                  onChange={(e) => setDurasi(e.target.value)}
+                  className="h-10"
+                />
                 <p className="mt-1.5 text-xs text-slate-400">
-                  Dibiarkan kosong jika tidak ingin mengisi durasi.
+                  Format Tahun-Bulan (YYYY-MM). Contoh: 2 tahun 6 bulan = isi 0002-06. Dibiarkan kosong jika tidak ingin mengisi.
                 </p>
               </div>
 
