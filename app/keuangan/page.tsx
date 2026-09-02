@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Wallet, Loader as Loader2, CircleAlert as AlertCircle, Calendar, CircleCheck as CheckCircle2, Circle as XCircle, CircleArrowUp as ArrowUpCircle, HandHeart, RotateCw, Scale, Receipt, ExternalLink, Landmark, Search, Filter as FilterIcon, Plus, Pencil, Check, Banknote, Coins, Trash2, X } from 'lucide-react';
+import { Wallet, Loader as Loader2, CircleAlert as AlertCircle, Calendar, CircleCheck as CheckCircle2, Circle as XCircle, CircleArrowUp as ArrowUpCircle, HandHeart, RotateCw, Scale, Receipt, ExternalLink, Landmark, Search, Filter as FilterIcon, Plus, Pencil, Check, Banknote, Trash2, X } from 'lucide-react';
 import {
   supabase,
   type Anggota,
@@ -345,16 +345,16 @@ export default function KeuanganPage() {
           </div>
         )}
 
-        {/* Summary Cards: Kas Masuk, Pinjaman Aktif, Sisa Kas Bersih */}
-        <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <Card className="overflow-hidden border-emerald-200 shadow-sm dark:border-emerald-900">
+        {/* Summary Cards: Total Uang Kas, Pinjaman Aktif */}
+        <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <Card className="overflow-hidden border-blue-200 shadow-sm dark:border-blue-900">
             <CardContent className="flex items-center gap-3 p-4">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400">
-                <Coins className="h-5 w-5" />
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400">
+                <Scale className="h-5 w-5" />
               </div>
               <div className="min-w-0">
-                <p className="truncate text-xs font-medium text-slate-500 dark:text-slate-400">Total Kas Masuk</p>
-                <p className="text-xl font-bold leading-tight text-slate-800 dark:text-slate-100">{hideNominal ? 'Rp •••' : formatRupiah(stats.totalKasMasuk)}</p>
+                <p className="truncate text-xs font-medium text-slate-500 dark:text-slate-400">Total Uang Kas</p>
+                <p className="text-xl font-bold leading-tight text-slate-800 dark:text-slate-100">{hideNominal ? 'Rp •••' : formatRupiah(sisaKasBersih)}</p>
               </div>
             </CardContent>
           </Card>
@@ -366,17 +366,6 @@ export default function KeuanganPage() {
               <div className="min-w-0">
                 <p className="truncate text-xs font-medium text-slate-500 dark:text-slate-400">Total Pinjaman Aktif</p>
                 <p className="text-xl font-bold leading-tight text-slate-800 dark:text-slate-100">{hideNominal ? 'Rp •••' : formatRupiah(totalPinjamanAktif)}</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="overflow-hidden border-blue-200 shadow-sm dark:border-blue-900">
-            <CardContent className="flex items-center gap-3 p-4">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400">
-                <Scale className="h-5 w-5" />
-              </div>
-              <div className="min-w-0">
-                <p className="truncate text-xs font-medium text-slate-500 dark:text-slate-400">Sisa Kas Bersih di Tangan</p>
-                <p className="text-xl font-bold leading-tight text-slate-800 dark:text-slate-100">{hideNominal ? 'Rp •••' : formatRupiah(sisaKasBersih)}</p>
               </div>
             </CardContent>
           </Card>
